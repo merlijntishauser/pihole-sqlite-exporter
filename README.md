@@ -44,6 +44,17 @@ docker compose -f docker-compose.example.yml up -d --build
 wget -qO- http://127.0.0.1:9617/metrics
 ```
 
+## Lint
+```bash
+ruff check .
+```
+
+## Format
+```bash
+ruff format .
+```
+
 ## Notes
 - Mount /etc/pihole read-only.
 - domains_being_blocked prefers gravity.db (gravity table). If missing, it falls back to domain_by_id (less precise).
+- Disclaimer: AI assistance was used while writing parts of the codebase.

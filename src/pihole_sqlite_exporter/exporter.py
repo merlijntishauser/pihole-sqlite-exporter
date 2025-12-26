@@ -1,13 +1,13 @@
-import os
-import time
-import sqlite3
-from datetime import datetime
-from http.server import BaseHTTPRequestHandler, HTTPServer
 import argparse
 import logging
-
+import os
+import sqlite3
+import time
+from datetime import datetime
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from zoneinfo import ZoneInfo
-from prometheus_client import CollectorRegistry, Gauge, generate_latest, CONTENT_TYPE_LATEST
+
+from prometheus_client import CONTENT_TYPE_LATEST, CollectorRegistry, Gauge, generate_latest
 from prometheus_client.core import CounterMetricFamily
 
 # ----------------------------
@@ -72,19 +72,19 @@ QUERY_TYPE_MAP = {
 
 REPLY_TYPE_MAP = {
     0: "unknown",
-    1: "no_data",    # NODATA
+    1: "no_data",  # NODATA
     2: "nx_domain",  # NXDOMAIN
-    3: "cname",      # CNAME
-    4: "ip",         # a valid IP record
-    5: "domain",     # DOMAIN
-    6: "rr_name",    # RRNAME
+    3: "cname",  # CNAME
+    4: "ip",  # a valid IP record
+    5: "domain",  # DOMAIN
+    6: "rr_name",  # RRNAME
     7: "serv_fail",  # SERVFAIL
-    8: "refused",    # REFUSED
-    9: "not_imp",    # NOTIMP
-    10: "other",     # OTHER
-    11: "dnssec",    # DNSSEC
-    12: "none",      # NONE
-    13: "blob",      # BLOB
+    8: "refused",  # REFUSED
+    9: "not_imp",  # NOTIMP
+    10: "other",  # OTHER
+    11: "dnssec",  # DNSSEC
+    12: "none",  # NONE
+    13: "blob",  # BLOB
 }
 
 # ----------------------------
@@ -113,7 +113,10 @@ class PiholeTotalsCollector:
 
         m1 = CounterMetricFamily(
             "pihole_dns_queries_total",
-            "Total number of DNS queries (lifetime, monotonic) as reported by Pi-hole FTL counters table",
+            (
+                "Total number of DNS queries (lifetime, monotonic) as reported by Pi-hole FTL "
+                "counters table"
+            ),
             labels=["hostname"],
         )
         m1.add_metric([host], float(_total_queries_lifetime))
@@ -121,7 +124,10 @@ class PiholeTotalsCollector:
 
         m2 = CounterMetricFamily(
             "pihole_ads_blocked_total",
-            "Total number of blocked queries (lifetime, monotonic) as reported by Pi-hole FTL counters table",
+            (
+                "Total number of blocked queries (lifetime, monotonic) as reported by Pi-hole FTL "
+                "counters table"
+            ),
             labels=["hostname"],
         )
         m2.add_metric([host], float(_blocked_queries_lifetime))
@@ -142,7 +148,10 @@ class PiholeDestTotalsCollector:
         host = HOSTNAME_LABEL
         m = CounterMetricFamily(
             "pihole_forward_destinations_total",
-            "Total number of forward destinations requests made by Pi-hole by destination (lifetime, derived from queries table)",
+            (
+                "Total number of forward destinations requests made by Pi-hole by destination "
+                "(lifetime, derived from queries table)"
+            ),
             labels=["hostname", "destination", "destination_name"],
         )
 
@@ -301,6 +310,7 @@ pihole_unique_domains = Gauge(
     registry=REGISTRY,
 )
 
+
 # ----------------------------
 # Helpers
 # ----------------------------
@@ -314,7 +324,9 @@ def _get_tz() -> ZoneInfo:
     try:
         return ZoneInfo(EXPORTER_TZ)
     except Exception as e:
-        logger.warning("Invalid EXPORTER_TZ=%r; falling back to local tz. Reason: %s", EXPORTER_TZ, e)
+        logger.warning(
+            "Invalid EXPORTER_TZ=%r; falling back to local tz. Reason: %s", EXPORTER_TZ, e
+        )
         return datetime.now().astimezone().tzinfo  # type: ignore[return-value]
 
 
@@ -378,7 +390,9 @@ def scrape_and_update():
         cur.execute("SELECT value FROM counters WHERE id = 1;")
         _blocked_queries_lifetime = int(cur.fetchone()[0])
 
-        logger.debug("FTL counters: total=%d blocked=%d", _total_queries_lifetime, _blocked_queries_lifetime)
+        logger.debug(
+            "FTL counters: total=%d blocked=%d", _total_queries_lifetime, _blocked_queries_lifetime
+        )
 
         # --- NEW: Lifetime per-destination totals (derived) ---
         # These are computed from the full queries table (no timestamp filter).
@@ -408,7 +422,9 @@ def scrape_and_update():
             lifetime["blocklist"] = int(cur.fetchone()[0])
 
             _forward_destinations_lifetime = lifetime
-            logger.debug("Lifetime destinations computed: %d labelsets", len(_forward_destinations_lifetime))
+            logger.debug(
+                "Lifetime destinations computed: %d labelsets", len(_forward_destinations_lifetime)
+            )
         else:
             _forward_destinations_lifetime = {}
 
@@ -442,13 +458,19 @@ def scrape_and_update():
         pihole_dns_queries_today.labels(host).set(float(q_today))
         pihole_dns_queries_all_types.labels(host).set(float(q_today))
         pihole_ads_blocked_today.labels(host).set(float(b_today))
-        pihole_ads_percentage_today.labels(host).set((b_today / q_today * 100.0) if q_today > 0 else 0.0)
+        pihole_ads_percentage_today.labels(host).set(
+            (b_today / q_today * 100.0) if q_today > 0 else 0.0
+        )
 
         # Unique clients/domains in last 24h
-        cur.execute("SELECT COUNT(DISTINCT client) FROM queries WHERE timestamp >= ?;", (now - 86400,))
+        cur.execute(
+            "SELECT COUNT(DISTINCT client) FROM queries WHERE timestamp >= ?;", (now - 86400,)
+        )
         pihole_unique_clients.labels(host).set(float(cur.fetchone()[0]))
 
-        cur.execute("SELECT COUNT(DISTINCT domain) FROM queries WHERE timestamp >= ?;", (now - 86400,))
+        cur.execute(
+            "SELECT COUNT(DISTINCT domain) FROM queries WHERE timestamp >= ?;", (now - 86400,)
+        )
         pihole_unique_domains.labels(host).set(float(cur.fetchone()[0]))
 
         # Query types today
@@ -512,7 +534,9 @@ def scrape_and_update():
         for fwd, cnt, avg_rt in forwards:
             dest = str(fwd)
             pihole_forward_destinations.labels(host, dest, dest).set(float(cnt))
-            pihole_forward_destinations_responsetime.labels(host, dest, dest).set(float(avg_rt or 0.0))
+            pihole_forward_destinations_responsetime.labels(host, dest, dest).set(
+                float(avg_rt or 0.0)
+            )
 
             cur.execute(
                 """
@@ -526,7 +550,9 @@ def scrape_and_update():
                 (sod, fwd),
             )
             vals = [float(r[0]) for r in cur.fetchall()]
-            pihole_forward_destinations_responsevariance.labels(host, dest, dest).set(float(variance(vals)))
+            pihole_forward_destinations_responsevariance.labels(host, dest, dest).set(
+                float(variance(vals))
+            )
 
         # Synthetic destinations cache + blocklist (today)
         cur.execute("SELECT COUNT(*) FROM queries WHERE timestamp >= ? AND status = 3;", (sod,))
@@ -652,7 +678,7 @@ class Handler(BaseHTTPRequestHandler):
             logger.info("HTTP 200 served metrics bytes=%d", len(payload))
         except Exception as e:
             logger.exception("Scrape failed while serving request")
-            msg = f"scrape failed: {e}\n".encode("utf-8")
+            msg = f"scrape failed: {e}\n".encode()
             self.send_response(500)
             self.send_header("Content-Type", "text/plain; charset=utf-8")
             self.send_header("Content-Length", str(len(msg)))
@@ -675,7 +701,10 @@ def main():
     configure_logging(verbose)
 
     logger.info(
-        "Starting exporter (listen=%s:%s, tz=%s, ftl_db=%s, gravity_db=%s, top_n=%s, lifetime_dest_counters=%s)",
+        (
+            "Starting exporter (listen=%s:%s, tz=%s, ftl_db=%s, gravity_db=%s, top_n=%s, "
+            "lifetime_dest_counters=%s)"
+        ),
         LISTEN_ADDR,
         LISTEN_PORT,
         EXPORTER_TZ,
