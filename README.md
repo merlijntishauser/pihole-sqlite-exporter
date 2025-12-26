@@ -63,3 +63,4 @@ ruff format .
 - Mount /etc/pihole read-only.
 - domains_being_blocked prefers gravity.db (gravity table). If missing, it falls back to domain_by_id (less precise).
 - Disclaimer: AI assistance was used while writing parts of the codebase.
+- Docker image base uses `dhi.io/python:3-alpine3.22` by default (override via `PYTHON_BASE_IMAGE` build arg).

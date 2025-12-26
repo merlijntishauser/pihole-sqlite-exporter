@@ -1,21 +1,18 @@
-FROM python:3.14.2-alpine
+ARG PYTHON_BASE_IMAGE=dhi.io/python:3-alpine3.22
+FROM ${PYTHON_BASE_IMAGE}
 
 WORKDIR /app
 
-RUN apk add --no-cache ca-certificates sqlite \
-    && update-ca-certificates
-
-RUN python3 -m ensurepip --upgrade \
-    && python3 -m pip install --no-cache-dir --upgrade pip
-
 COPY requirements.txt /app/requirements.txt
-RUN pip install --no-cache-dir -r /app/requirements.txt
+RUN ["python3", "-m", "pip", "install", "--no-cache-dir", "--user", "-r", "/app/requirements.txt"]
 
 # Copy source
 COPY src /app/src
 
 ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONPATH=/app/src
+ENV PATH=/home/nonroot/.local/bin:$PATH
 
 EXPOSE 9617
 
