@@ -12,7 +12,10 @@ def _create_ftl_db(
     path: Path,
     now_ts: int,
     counters: tuple[int, int] = (5, 1),
-    queries: list[tuple[int, int, int, int | None, str | None, float | None, str, str]] | None = None,
+    queries: list[
+        tuple[int, int, int, int | None, str | None, float | None, str, str]
+    ]
+    | None = None,
     clients: list[tuple[str, str]] | None = None,
     domain_count: int = 2,
 ) -> None:
@@ -28,7 +31,9 @@ def _create_ftl_db(
         clients = [("10.0.0.1", "client-a"), ("10.0.0.2", "")]
     cur.executemany("INSERT INTO client_by_id (ip, name) VALUES (?, ?);", clients)
     cur.execute("CREATE TABLE domain_by_id (id INTEGER);")
-    cur.executemany("INSERT INTO domain_by_id (id) VALUES (?);", [(idx,) for idx in range(domain_count)])
+    cur.executemany(
+        "INSERT INTO domain_by_id (id) VALUES (?);", [(idx,) for idx in range(domain_count)]
+    )
 
     cur.execute(
         """
@@ -83,7 +88,10 @@ def ftl_db_factory(tmp_path: Path):
     def _factory(
         *,
         counters: tuple[int, int] = (5, 1),
-        queries: list[tuple[int, int, int, int | None, str | None, float | None, str, str]] | None = None,
+        queries: list[
+            tuple[int, int, int, int | None, str | None, float | None, str, str]
+        ]
+        | None = None,
         clients: list[tuple[str, str]] | None = None,
         domain_count: int = 2,
     ) -> Path:

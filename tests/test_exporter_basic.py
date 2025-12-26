@@ -109,7 +109,9 @@ def test_request_rate_after_second_scrape(
     exp.scrape_and_update()
 
     metrics = exp.generate_latest(exp.REGISTRY).decode("utf-8")
-    assert metric_value(metrics, "pihole_request_rate", {"hostname": "test-host"}) == pytest.approx(0.2)
+    assert metric_value(metrics, "pihole_request_rate", {"hostname": "test-host"}) == pytest.approx(
+        0.2
+    )
 
 
 def test_lifetime_destinations_metric(
