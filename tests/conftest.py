@@ -8,21 +8,27 @@ from prometheus_client import generate_latest
 from pihole_sqlite_exporter import exporter as exp
 
 
-def _create_ftl_db(path: Path, now_ts: int) -> None:
+def _create_ftl_db(
+    path: Path,
+    now_ts: int,
+    counters: tuple[int, int] = (5, 1),
+    queries: list[tuple[int, int, int, int | None, str | None, float | None, str, str]] | None = None,
+    clients: list[tuple[str, str]] | None = None,
+    domain_count: int = 2,
+) -> None:
     conn = sqlite3.connect(path)
     cur = conn.cursor()
     cur.execute("CREATE TABLE counters (id INTEGER, value INTEGER);")
     cur.executemany(
         "INSERT INTO counters (id, value) VALUES (?, ?);",
-        [(0, 5), (1, 1)],
+        [(0, counters[0]), (1, counters[1])],
     )
     cur.execute("CREATE TABLE client_by_id (ip TEXT, name TEXT);")
-    cur.executemany(
-        "INSERT INTO client_by_id (ip, name) VALUES (?, ?);",
-        [("10.0.0.1", "client-a"), ("10.0.0.2", "")],
-    )
+    if clients is None:
+        clients = [("10.0.0.1", "client-a"), ("10.0.0.2", "")]
+    cur.executemany("INSERT INTO client_by_id (ip, name) VALUES (?, ?);", clients)
     cur.execute("CREATE TABLE domain_by_id (id INTEGER);")
-    cur.executemany("INSERT INTO domain_by_id (id) VALUES (?);", [(1,), (2,)])
+    cur.executemany("INSERT INTO domain_by_id (id) VALUES (?);", [(idx,) for idx in range(domain_count)])
 
     cur.execute(
         """
@@ -38,17 +44,19 @@ def _create_ftl_db(path: Path, now_ts: int) -> None:
         );
         """
     )
+    if queries is None:
+        queries = [
+            (now_ts - 10, 2, 1, 3, "1.1.1.1", 0.1, "example.com", "10.0.0.1"),
+            (now_ts - 20, 3, 2, 2, None, None, "cached.com", "10.0.0.2"),
+            (now_ts - 30, 1, 1, 2, None, None, "ads.com", "10.0.0.1"),
+        ]
     cur.executemany(
         """
         INSERT INTO queries (
             timestamp, status, type, reply_type, forward, reply_time, domain, client
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?);
         """,
-        [
-            (now_ts - 10, 2, 1, 3, "1.1.1.1", 0.1, "example.com", "10.0.0.1"),
-            (now_ts - 20, 3, 2, 2, None, None, "cached.com", "10.0.0.2"),
-            (now_ts - 30, 1, 1, 2, None, None, "ads.com", "10.0.0.1"),
-        ],
+        queries,
     )
     conn.commit()
     conn.close()
@@ -68,6 +76,42 @@ def ftl_db(tmp_path: Path) -> Path:
     path = tmp_path / "pihole-FTL.db"
     _create_ftl_db(path, int(time.time()))
     return path
+
+
+@pytest.fixture
+def ftl_db_factory(tmp_path: Path):
+    def _factory(
+        *,
+        counters: tuple[int, int] = (5, 1),
+        queries: list[tuple[int, int, int, int | None, str | None, float | None, str, str]] | None = None,
+        clients: list[tuple[str, str]] | None = None,
+        domain_count: int = 2,
+    ) -> Path:
+        path = tmp_path / "pihole-FTL.db"
+        _create_ftl_db(
+            path,
+            int(time.time()),
+            counters=counters,
+            queries=queries,
+            clients=clients,
+            domain_count=domain_count,
+        )
+        return path
+
+    return _factory
+
+
+@pytest.fixture
+def update_counters():
+    def _update(path: Path, total: int, blocked: int) -> None:
+        conn = sqlite3.connect(path)
+        cur = conn.cursor()
+        cur.execute("UPDATE counters SET value = ? WHERE id = 0;", (total,))
+        cur.execute("UPDATE counters SET value = ? WHERE id = 1;", (blocked,))
+        conn.commit()
+        conn.close()
+
+    return _update
 
 
 @pytest.fixture

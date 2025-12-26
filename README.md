@@ -44,6 +44,11 @@ docker compose -f docker-compose.example.yml up -d --build
 wget -qO- http://127.0.0.1:9617/metrics
 ```
 
+## Coverage
+```bash
+pytest --cov=src --cov-report=term-missing
+```
+
 ## Lint
 ```bash
 ruff check .
