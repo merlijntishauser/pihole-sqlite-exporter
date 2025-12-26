@@ -59,6 +59,17 @@ ruff check .
 ruff format .
 ```
 
+## Versioning
+SemVer is tracked in `VERSION`.
+
+```bash
+make bump-patch   # or bump-minor / bump-major
+git add VERSION
+git commit -m "Bump version to $(cat VERSION)"
+make tag
+make push-tag
+```
+
 ## Notes
 - Mount /etc/pihole read-only.
 - domains_being_blocked prefers gravity.db (gravity table). If missing, it falls back to domain_by_id (less precise).
