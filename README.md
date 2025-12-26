@@ -83,3 +83,4 @@ make docker-push IMAGE_NAME=youruser/pihole-sqlite-exporter
 - Disclaimer: AI assistance was used while writing parts of the codebase.
 - Docker image base uses `dhi.io/python:3-alpine3.22` by default (override via `PYTHON_BASE_IMAGE` build arg).
 - Docker Hub releases are automated on `vX.Y.Z` tags. Set `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` secrets.
+- GitHub Actions also needs `DHI_USERNAME` and `DHI_TOKEN` to pull the base image from `dhi.io`.
