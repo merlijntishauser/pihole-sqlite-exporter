@@ -12,9 +12,7 @@ def _create_ftl_db(
     path: Path,
     now_ts: int,
     counters: tuple[int, int] = (5, 1),
-    queries: list[
-        tuple[int, int, int, int | None, str | None, float | None, str, str]
-    ]
+    queries: list[tuple[int, int, int, int | None, str | None, float | None, str, str]]
     | None = None,
     clients: list[tuple[str, str]] | None = None,
     domain_count: int = 2,
@@ -88,9 +86,7 @@ def ftl_db_factory(tmp_path: Path):
     def _factory(
         *,
         counters: tuple[int, int] = (5, 1),
-        queries: list[
-            tuple[int, int, int, int | None, str | None, float | None, str, str]
-        ]
+        queries: list[tuple[int, int, int, int | None, str | None, float | None, str, str]]
         | None = None,
         clients: list[tuple[str, str]] | None = None,
         domain_count: int = 2,
