@@ -9,7 +9,7 @@ services:
     container_name: pihole_sqlite_exporter
     restart: unless-stopped
     # Set PUID/PGID in your shell env if you need specific permissions
-    user: "${PUID:-0}:${PGID:-0}"
+    user: "0:0"
     environment:
       HOSTNAME_LABEL: "host.docker.internal"
       EXPORTER_TZ: "Europe/Amsterdam"
