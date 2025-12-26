@@ -2,7 +2,7 @@ VERSION_FILE := VERSION
 VERSION := $(shell cat $(VERSION_FILE))
 IMAGE_NAME ?= pihole-sqlite-exporter
 
-.PHONY: version bump-patch bump-minor bump-major tag push-tag release docker-build docker-tag docker-push docker-release
+.PHONY: version bump-patch bump-minor bump-major tag push-tag release docker-build docker-tag docker-push docker-release docker-buildx
 
 version:
 	@echo $(VERSION)
@@ -35,3 +35,6 @@ docker-push:
 	@docker push $(IMAGE_NAME):latest
 
 docker-release: docker-build docker-tag docker-push
+
+docker-buildx:
+	@docker buildx build --platform linux/amd64,linux/arm64 -f docker/Dockerfile.alpine -t $(IMAGE_NAME):$(VERSION) -t $(IMAGE_NAME):latest --push .

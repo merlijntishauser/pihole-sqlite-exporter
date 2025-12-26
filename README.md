@@ -76,6 +76,10 @@ make docker-build IMAGE_NAME=youruser/pihole-sqlite-exporter
 make docker-tag IMAGE_NAME=youruser/pihole-sqlite-exporter
 make docker-push IMAGE_NAME=youruser/pihole-sqlite-exporter
 ```
+For a multi-arch build/push (amd64/arm64):
+```bash
+make docker-buildx IMAGE_NAME=youruser/pihole-sqlite-exporter
+```
 
 ## Notes
 - Mount /etc/pihole read-only.
