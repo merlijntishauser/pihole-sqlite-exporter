@@ -1,0 +1,33 @@
+You are a coding agent working in /Users/merlijn/Development/personal/pihole-sqlite-exporter.
+
+Top priority (XP values)
+- Naming is critical; choose clear, intention-revealing names.
+- Optimize for human readability and understandability over cleverness.
+- Prefer small, safe refactors and commit often.
+
+Project context
+- Python Prometheus exporter reading Pi-hole metrics from SQLite (no HTTP API).
+- Docker image uses dhi.io/python:3-alpine3.22 with dependencies installed into /app/vendor.
+- Multi-arch Docker releases via GitHub Actions; Dockle + Trivy scans update README and Docker Hub description.
+- Tests are split into logical modules under tests/.
+
+Workflow preferences
+- Use rg for search.
+- Use apply_patch for single-file edits when practical.
+- Keep edits ASCII unless file already uses Unicode.
+- Prefer clear, minimal comments only when code is non-obvious.
+
+Refactor expectations
+- Use Config, Scraper, and utility modules in src/pihole_sqlite_exporter.
+- Background scrape loop is in exporter._scrape_loop and should be testable (injectable time/sleep).
+- Avoid hardcoding Python versioned paths; keep dependencies under /app/vendor in Docker.
+
+Testing and linting
+- Ruff for linting and formatting (ruff check ., ruff format .).
+- Pytest for tests; coverage via pytest --cov=src --cov-report=term-missing.
+- Docker verification: make docker-verify (Dockle + Trivy via containers).
+
+Release and Docker
+- VERSION file is SemVer; use Makefile bump targets.
+- Docker Hub repo: https://hub.docker.com/r/merlijntishauser/pihole-sqlite-exporter
+- GitHub repo: https://github.com/merlijntishauser/pihole-sqlite-exporter

@@ -62,6 +62,91 @@ REPLY_TYPE_MAP = {
     13: "blob",  # BLOB
 }
 
+SQL_COUNTER_TOTAL = "SELECT value FROM counters WHERE id = 0;"
+SQL_COUNTER_BLOCKED = "SELECT value FROM counters WHERE id = 1;"
+SQL_LIFETIME_FORWARD_DESTS = """
+    SELECT forward, COUNT(*)
+    FROM queries
+    WHERE status = 2
+      AND forward IS NOT NULL
+    GROUP BY forward;
+"""
+SQL_LIFETIME_CACHE = "SELECT COUNT(*) FROM queries WHERE status = 3;"
+SQL_LIFETIME_BLOCKED = "SELECT COUNT(*) FROM queries WHERE status IN ({blocked_list});"
+SQL_CLIENTS_EVER_SEEN = "SELECT COUNT(*) FROM client_by_id;"
+SQL_QUERIES_TODAY = """
+    SELECT COUNT(*)
+    FROM queries
+    WHERE timestamp >= ?;
+"""
+SQL_BLOCKED_TODAY = """
+    SELECT COUNT(*)
+    FROM queries
+    WHERE timestamp >= ?
+      AND status IN ({blocked_list});
+"""
+SQL_UNIQUE_CLIENTS = "SELECT COUNT(DISTINCT client) FROM queries WHERE timestamp >= ?;"
+SQL_UNIQUE_DOMAINS = "SELECT COUNT(DISTINCT domain) FROM queries WHERE timestamp >= ?;"
+SQL_QUERY_TYPES = """
+    SELECT type, COUNT(*)
+    FROM queries
+    WHERE timestamp >= ?
+    GROUP BY type;
+"""
+SQL_REPLY_TYPES = """
+    SELECT reply_type, COUNT(*)
+    FROM queries
+    WHERE timestamp >= ?
+    GROUP BY reply_type;
+"""
+SQL_FORWARDED_TODAY = "SELECT COUNT(*) FROM queries WHERE timestamp >= ? AND status = 2;"
+SQL_CACHED_TODAY = "SELECT COUNT(*) FROM queries WHERE timestamp >= ? AND status = 3;"
+SQL_FORWARD_DESTS_TODAY = """
+    SELECT forward, COUNT(*), AVG(reply_time)
+    FROM queries
+    WHERE timestamp >= ?
+      AND status = 2
+      AND forward IS NOT NULL
+    GROUP BY forward
+    ORDER BY COUNT(*) DESC;
+"""
+SQL_FORWARD_REPLY_TIMES = """
+    SELECT reply_time
+    FROM queries
+    WHERE timestamp >= ?
+      AND status = 2
+      AND forward = ?
+      AND reply_time IS NOT NULL;
+"""
+SQL_TOP_ADS = """
+    SELECT domain, COUNT(*) AS cnt
+    FROM queries
+    WHERE timestamp >= ?
+      AND status IN ({blocked_list})
+    GROUP BY domain
+    ORDER BY cnt DESC
+    LIMIT {top_n};
+"""
+SQL_TOP_QUERIES = """
+    SELECT domain, COUNT(*) AS cnt
+    FROM queries
+    WHERE timestamp >= ?
+    GROUP BY domain
+    ORDER BY cnt DESC
+    LIMIT {top_n};
+"""
+SQL_TOP_SOURCES = """
+    SELECT q.client, COALESCE(c.name,''), COUNT(*) AS cnt
+    FROM queries q
+    LEFT JOIN client_by_id c ON c.ip = q.client
+    WHERE q.timestamp >= ?
+    GROUP BY q.client, c.name
+    ORDER BY cnt DESC
+    LIMIT {top_n};
+"""
+SQL_GRAVITY_COUNT = "SELECT COUNT(*) FROM gravity;"
+SQL_DOMAIN_BY_ID_COUNT = "SELECT COUNT(*) FROM domain_by_id;"
+
 
 class Scraper:
     def __init__(self, config: Config) -> None:
@@ -233,6 +318,188 @@ class Scraper:
             return None, msg
         return self.get_payload()
 
+    def _blocked_status_list(self) -> str:
+        return ",".join(str(x) for x in sorted(BLOCKED_STATUSES))
+
+    def _clear_series(self) -> None:
+        self.pihole_top_ads.clear()
+        self.pihole_top_queries.clear()
+        self.pihole_top_sources.clear()
+        self.pihole_forward_destinations.clear()
+        self.pihole_forward_destinations_responsetime.clear()
+        self.pihole_forward_destinations_responsevariance.clear()
+
+    def _load_counters(self, cur, host: str) -> None:
+        self.pihole_status.labels(host).set(1)
+
+        cur.execute(SQL_COUNTER_TOTAL)
+        self.total_queries_lifetime = int(cur.fetchone()[0])
+
+        cur.execute(SQL_COUNTER_BLOCKED)
+        self.blocked_queries_lifetime = int(cur.fetchone()[0])
+
+        logger.debug(
+            "FTL counters: total=%d blocked=%d",
+            self.total_queries_lifetime,
+            self.blocked_queries_lifetime,
+        )
+
+    def _load_lifetime_destinations(self, cur, blocked_list: str) -> None:
+        if self.config.enable_lifetime_dest_counters:
+            lifetime = {}
+            cur.execute(SQL_LIFETIME_FORWARD_DESTS)
+            for fwd, cnt in cur.fetchall():
+                lifetime[str(fwd)] = int(cnt)
+
+            cur.execute(SQL_LIFETIME_CACHE)
+            lifetime["cache"] = int(cur.fetchone()[0])
+
+            cur.execute(SQL_LIFETIME_BLOCKED.format(blocked_list=blocked_list))
+            lifetime["blocklist"] = int(cur.fetchone()[0])
+
+            self.forward_destinations_lifetime = lifetime
+            logger.debug(
+                "Lifetime destinations computed: %d labelsets",
+                len(self.forward_destinations_lifetime),
+            )
+        else:
+            self.forward_destinations_lifetime = {}
+
+    def _load_clients_ever_seen(self, cur, host: str) -> None:
+        cur.execute(SQL_CLIENTS_EVER_SEEN)
+        self.pihole_clients_ever_seen.labels(host).set(float(cur.fetchone()[0]))
+
+    def _load_queries_today(self, cur, host: str, sod: int, blocked_list: str) -> None:
+        cur.execute(SQL_QUERIES_TODAY, (sod,))
+        q_today = int(cur.fetchone()[0])
+
+        cur.execute(SQL_BLOCKED_TODAY.format(blocked_list=blocked_list), (sod,))
+        b_today = int(cur.fetchone()[0])
+
+        self.pihole_dns_queries_today.labels(host).set(float(q_today))
+        self.pihole_dns_queries_all_types.labels(host).set(float(q_today))
+        self.pihole_ads_blocked_today.labels(host).set(float(b_today))
+        self.pihole_ads_percentage_today.labels(host).set(
+            (b_today / q_today * 100.0) if q_today > 0 else 0.0
+        )
+
+    def _load_unique_counts(self, cur, host: str, now: int) -> None:
+        cur.execute(SQL_UNIQUE_CLIENTS, (now - 86400,))
+        self.pihole_unique_clients.labels(host).set(float(cur.fetchone()[0]))
+
+        cur.execute(SQL_UNIQUE_DOMAINS, (now - 86400,))
+        self.pihole_unique_domains.labels(host).set(float(cur.fetchone()[0]))
+
+    def _load_query_types(self, cur, host: str, sod: int) -> None:
+        cur.execute(SQL_QUERY_TYPES, (sod,))
+        counts_by_type = {k: 0 for k in QUERY_TYPE_MAP.keys()}
+        for t, c in cur.fetchall():
+            counts_by_type[int(t)] = int(c)
+
+        for tid, name in QUERY_TYPE_MAP.items():
+            self.pihole_querytypes.labels(host, name).set(float(counts_by_type.get(tid, 0)))
+
+    def _load_reply_types(self, cur, host: str, sod: int) -> None:
+        cur.execute(SQL_REPLY_TYPES, (sod,))
+        counts_by_reply = {k: 0 for k in REPLY_TYPE_MAP.keys()}
+        for rt, c in cur.fetchall():
+            if rt is None:
+                continue
+            counts_by_reply[int(rt)] = int(c)
+
+        for rid, label in REPLY_TYPE_MAP.items():
+            self.pihole_reply.labels(host, label).set(float(counts_by_reply.get(rid, 0)))
+
+    def _load_cache_forwarded(self, cur, host: str, sod: int) -> None:
+        cur.execute(SQL_FORWARDED_TODAY, (sod,))
+        self.pihole_queries_forwarded.labels(host).set(float(cur.fetchone()[0]))
+
+        cur.execute(SQL_CACHED_TODAY, (sod,))
+        self.pihole_queries_cached.labels(host).set(float(cur.fetchone()[0]))
+
+    def _load_forward_destinations(self, cur, host: str, sod: int) -> None:
+        cur.execute(SQL_FORWARD_DESTS_TODAY, (sod,))
+        forwards = cur.fetchall()
+
+        for fwd, cnt, avg_rt in forwards:
+            dest = str(fwd)
+            self.pihole_forward_destinations.labels(host, dest, dest).set(float(cnt))
+            self.pihole_forward_destinations_responsetime.labels(host, dest, dest).set(
+                float(avg_rt or 0.0)
+            )
+
+            cur.execute(SQL_FORWARD_REPLY_TIMES, (sod, fwd))
+            vals = [float(r[0]) for r in cur.fetchall()]
+            self.pihole_forward_destinations_responsevariance.labels(host, dest, dest).set(
+                float(variance(vals))
+            )
+
+    def _load_synthetic_destinations(self, cur, host: str, sod: int, blocked_list: str) -> None:
+        cur.execute(SQL_CACHED_TODAY, (sod,))
+        cache_cnt = int(cur.fetchone()[0])
+        self.pihole_forward_destinations.labels(host, "cache", "cache").set(float(cache_cnt))
+        self.pihole_forward_destinations_responsetime.labels(host, "cache", "cache").set(0.0)
+        self.pihole_forward_destinations_responsevariance.labels(host, "cache", "cache").set(0.0)
+
+        cur.execute(SQL_BLOCKED_TODAY.format(blocked_list=blocked_list), (sod,))
+        bl_cnt = int(cur.fetchone()[0])
+        self.pihole_forward_destinations.labels(host, "blocklist", "blocklist").set(float(bl_cnt))
+        self.pihole_forward_destinations_responsetime.labels(host, "blocklist", "blocklist").set(
+            0.0
+        )
+        self.pihole_forward_destinations_responsevariance.labels(
+            host, "blocklist", "blocklist"
+        ).set(0.0)
+
+    def _load_top_lists(self, cur, host: str, sod: int, blocked_list: str) -> None:
+        cur.execute(SQL_TOP_ADS.format(blocked_list=blocked_list, top_n=self.config.top_n), (sod,))
+        for domain, cnt in cur.fetchall():
+            self.pihole_top_ads.labels(host, str(domain)).set(float(cnt))
+
+        cur.execute(SQL_TOP_QUERIES.format(top_n=self.config.top_n), (sod,))
+        for domain, cnt in cur.fetchall():
+            self.pihole_top_queries.labels(host, str(domain)).set(float(cnt))
+
+        cur.execute(SQL_TOP_SOURCES.format(top_n=self.config.top_n), (sod,))
+        for ip, name, cnt in cur.fetchall():
+            self.pihole_top_sources.labels(host, str(ip), str(name or "")).set(float(cnt))
+
+    def _load_domains_blocked(self, host: str) -> None:
+        domains_value = None
+        try:
+            with sqlite_ro(self.config.gravity_db_path) as gconn:
+                gcur = gconn.cursor()
+                gcur.execute(SQL_GRAVITY_COUNT)
+                domains_value = int(gcur.fetchone()[0])
+        except Exception as e:
+            logger.info("Gravity DB unavailable; falling back (reason: %s)", e)
+            domains_value = None
+
+        if domains_value is None:
+            try:
+                with sqlite_ro(self.config.ftl_db_path) as conn:
+                    cur = conn.cursor()
+                    cur.execute(SQL_DOMAIN_BY_ID_COUNT)
+                    domains_value = int(cur.fetchone()[0])
+            except Exception as e:
+                logger.warning("Fallback domain count failed: %s", e)
+                domains_value = 0
+
+        self.pihole_domains_being_blocked.labels(host).set(float(domains_value))
+
+    def _update_request_rate(self, host: str) -> None:
+        if self._last_total_queries_lifetime is not None and self._last_rate_ts is not None:
+            dt = max(1.0, time.time() - self._last_rate_ts)
+            dq = max(0, self.total_queries_lifetime - self._last_total_queries_lifetime)
+            self.pihole_request_rate.labels(host).set(dq / dt)
+            logger.debug("Request rate queries_delta=%d time_delta=%.3f rate=%.6f", dq, dt, dq / dt)
+        else:
+            self.pihole_request_rate.labels(host).set(0.0)
+            logger.debug("Request rate initialized to 0.0")
+
+        self._last_total_queries_lifetime = self.total_queries_lifetime
+        self._last_rate_ts = time.time()
+
     def scrape_and_update(self) -> None:
         host = self.config.hostname_label
         tz = get_tz(self.config.exporter_tz)
@@ -247,283 +514,26 @@ class Scraper:
             self.config.exporter_tz,
         )
 
-        self.pihole_top_ads.clear()
-        self.pihole_top_queries.clear()
-        self.pihole_top_sources.clear()
-        self.pihole_forward_destinations.clear()
-        self.pihole_forward_destinations_responsetime.clear()
-        self.pihole_forward_destinations_responsevariance.clear()
-
-        blocked_list = ",".join(str(x) for x in sorted(BLOCKED_STATUSES))
+        self._clear_series()
+        blocked_list = self._blocked_status_list()
 
         with sqlite_ro(self.config.ftl_db_path) as conn:
             cur = conn.cursor()
 
-            self.pihole_status.labels(host).set(1)
+            self._load_counters(cur, host)
+            self._load_lifetime_destinations(cur, blocked_list)
+            self._load_clients_ever_seen(cur, host)
+            self._load_queries_today(cur, host, sod, blocked_list)
+            self._load_unique_counts(cur, host, now)
+            self._load_query_types(cur, host, sod)
+            self._load_reply_types(cur, host, sod)
+            self._load_cache_forwarded(cur, host, sod)
+            self._load_forward_destinations(cur, host, sod)
+            self._load_synthetic_destinations(cur, host, sod, blocked_list)
+            self._load_top_lists(cur, host, sod, blocked_list)
 
-            cur.execute("SELECT value FROM counters WHERE id = 0;")
-            self.total_queries_lifetime = int(cur.fetchone()[0])
-
-            cur.execute("SELECT value FROM counters WHERE id = 1;")
-            self.blocked_queries_lifetime = int(cur.fetchone()[0])
-
-            logger.debug(
-                "FTL counters: total=%d blocked=%d",
-                self.total_queries_lifetime,
-                self.blocked_queries_lifetime,
-            )
-
-            if self.config.enable_lifetime_dest_counters:
-                lifetime = {}
-                cur.execute(
-                    """
-                    SELECT forward, COUNT(*)
-                    FROM queries
-                    WHERE status = 2
-                      AND forward IS NOT NULL
-                    GROUP BY forward;
-                    """
-                )
-                for fwd, cnt in cur.fetchall():
-                    lifetime[str(fwd)] = int(cnt)
-
-                cur.execute("SELECT COUNT(*) FROM queries WHERE status = 3;")
-                lifetime["cache"] = int(cur.fetchone()[0])
-
-                cur.execute(f"SELECT COUNT(*) FROM queries WHERE status IN ({blocked_list});")
-                lifetime["blocklist"] = int(cur.fetchone()[0])
-
-                self.forward_destinations_lifetime = lifetime
-                logger.debug(
-                    "Lifetime destinations computed: %d labelsets",
-                    len(self.forward_destinations_lifetime),
-                )
-            else:
-                self.forward_destinations_lifetime = {}
-
-            cur.execute("SELECT COUNT(*) FROM client_by_id;")
-            self.pihole_clients_ever_seen.labels(host).set(float(cur.fetchone()[0]))
-
-            cur.execute(
-                """
-                SELECT COUNT(*)
-                FROM queries
-                WHERE timestamp >= ?;
-                """,
-                (sod,),
-            )
-            q_today = int(cur.fetchone()[0])
-
-            cur.execute(
-                f"""
-                SELECT COUNT(*)
-                FROM queries
-                WHERE timestamp >= ?
-                  AND status IN ({blocked_list});
-                """,
-                (sod,),
-            )
-            b_today = int(cur.fetchone()[0])
-
-            self.pihole_dns_queries_today.labels(host).set(float(q_today))
-            self.pihole_dns_queries_all_types.labels(host).set(float(q_today))
-            self.pihole_ads_blocked_today.labels(host).set(float(b_today))
-            self.pihole_ads_percentage_today.labels(host).set(
-                (b_today / q_today * 100.0) if q_today > 0 else 0.0
-            )
-
-            cur.execute(
-                "SELECT COUNT(DISTINCT client) FROM queries WHERE timestamp >= ?;", (now - 86400,)
-            )
-            self.pihole_unique_clients.labels(host).set(float(cur.fetchone()[0]))
-
-            cur.execute(
-                "SELECT COUNT(DISTINCT domain) FROM queries WHERE timestamp >= ?;", (now - 86400,)
-            )
-            self.pihole_unique_domains.labels(host).set(float(cur.fetchone()[0]))
-
-            cur.execute(
-                """
-                SELECT type, COUNT(*)
-                FROM queries
-                WHERE timestamp >= ?
-                GROUP BY type;
-                """,
-                (sod,),
-            )
-            counts_by_type = {k: 0 for k in QUERY_TYPE_MAP.keys()}
-            for t, c in cur.fetchall():
-                counts_by_type[int(t)] = int(c)
-
-            for tid, name in QUERY_TYPE_MAP.items():
-                self.pihole_querytypes.labels(host, name).set(float(counts_by_type.get(tid, 0)))
-
-            cur.execute(
-                """
-                SELECT reply_type, COUNT(*)
-                FROM queries
-                WHERE timestamp >= ?
-                GROUP BY reply_type;
-                """,
-                (sod,),
-            )
-            counts_by_reply = {k: 0 for k in REPLY_TYPE_MAP.keys()}
-            for rt, c in cur.fetchall():
-                if rt is None:
-                    continue
-                counts_by_reply[int(rt)] = int(c)
-
-            for rid, label in REPLY_TYPE_MAP.items():
-                self.pihole_reply.labels(host, label).set(float(counts_by_reply.get(rid, 0)))
-
-            cur.execute("SELECT COUNT(*) FROM queries WHERE timestamp >= ? AND status = 2;", (sod,))
-            self.pihole_queries_forwarded.labels(host).set(float(cur.fetchone()[0]))
-
-            cur.execute("SELECT COUNT(*) FROM queries WHERE timestamp >= ? AND status = 3;", (sod,))
-            self.pihole_queries_cached.labels(host).set(float(cur.fetchone()[0]))
-
-            cur.execute(
-                """
-                SELECT forward, COUNT(*), AVG(reply_time)
-                FROM queries
-                WHERE timestamp >= ?
-                  AND status = 2
-                  AND forward IS NOT NULL
-                GROUP BY forward
-                ORDER BY COUNT(*) DESC;
-                """,
-                (sod,),
-            )
-            forwards = cur.fetchall()
-
-            for fwd, cnt, avg_rt in forwards:
-                dest = str(fwd)
-                self.pihole_forward_destinations.labels(host, dest, dest).set(float(cnt))
-                self.pihole_forward_destinations_responsetime.labels(host, dest, dest).set(
-                    float(avg_rt or 0.0)
-                )
-
-                cur.execute(
-                    """
-                    SELECT reply_time
-                    FROM queries
-                    WHERE timestamp >= ?
-                      AND status = 2
-                      AND forward = ?
-                      AND reply_time IS NOT NULL;
-                    """,
-                    (sod, fwd),
-                )
-                vals = [float(r[0]) for r in cur.fetchall()]
-                self.pihole_forward_destinations_responsevariance.labels(host, dest, dest).set(
-                    float(variance(vals))
-                )
-
-            cur.execute("SELECT COUNT(*) FROM queries WHERE timestamp >= ? AND status = 3;", (sod,))
-            cache_cnt = int(cur.fetchone()[0])
-            self.pihole_forward_destinations.labels(host, "cache", "cache").set(float(cache_cnt))
-            self.pihole_forward_destinations_responsetime.labels(host, "cache", "cache").set(0.0)
-            self.pihole_forward_destinations_responsevariance.labels(host, "cache", "cache").set(
-                0.0
-            )
-
-            cur.execute(
-                f"""
-                SELECT COUNT(*)
-                FROM queries
-                WHERE timestamp >= ?
-                  AND status IN ({blocked_list});
-                """,
-                (sod,),
-            )
-            bl_cnt = int(cur.fetchone()[0])
-            self.pihole_forward_destinations.labels(host, "blocklist", "blocklist").set(
-                float(bl_cnt)
-            )
-            self.pihole_forward_destinations_responsetime.labels(
-                host, "blocklist", "blocklist"
-            ).set(0.0)
-            self.pihole_forward_destinations_responsevariance.labels(
-                host, "blocklist", "blocklist"
-            ).set(0.0)
-
-            cur.execute(
-                f"""
-                SELECT domain, COUNT(*) AS cnt
-                FROM queries
-                WHERE timestamp >= ?
-                  AND status IN ({blocked_list})
-                GROUP BY domain
-                ORDER BY cnt DESC
-                LIMIT {self.config.top_n};
-                """,
-                (sod,),
-            )
-            for domain, cnt in cur.fetchall():
-                self.pihole_top_ads.labels(host, str(domain)).set(float(cnt))
-
-            cur.execute(
-                f"""
-                SELECT domain, COUNT(*) AS cnt
-                FROM queries
-                WHERE timestamp >= ?
-                GROUP BY domain
-                ORDER BY cnt DESC
-                LIMIT {self.config.top_n};
-                """,
-                (sod,),
-            )
-            for domain, cnt in cur.fetchall():
-                self.pihole_top_queries.labels(host, str(domain)).set(float(cnt))
-
-            cur.execute(
-                f"""
-                SELECT q.client, COALESCE(c.name,''), COUNT(*) AS cnt
-                FROM queries q
-                LEFT JOIN client_by_id c ON c.ip = q.client
-                WHERE q.timestamp >= ?
-                GROUP BY q.client, c.name
-                ORDER BY cnt DESC
-                LIMIT {self.config.top_n};
-                """,
-                (sod,),
-            )
-            for ip, name, cnt in cur.fetchall():
-                self.pihole_top_sources.labels(host, str(ip), str(name or "")).set(float(cnt))
-
-        domains_value = None
-        try:
-            with sqlite_ro(self.config.gravity_db_path) as gconn:
-                gcur = gconn.cursor()
-                gcur.execute("SELECT COUNT(*) FROM gravity;")
-                domains_value = int(gcur.fetchone()[0])
-        except Exception as e:
-            logger.info("Gravity DB unavailable; falling back (reason: %s)", e)
-            domains_value = None
-
-        if domains_value is None:
-            try:
-                with sqlite_ro(self.config.ftl_db_path) as conn:
-                    cur = conn.cursor()
-                    cur.execute("SELECT COUNT(*) FROM domain_by_id;")
-                    domains_value = int(cur.fetchone()[0])
-            except Exception as e:
-                logger.warning("Fallback domain count failed: %s", e)
-                domains_value = 0
-
-        self.pihole_domains_being_blocked.labels(host).set(float(domains_value))
-
-        if self._last_total_queries_lifetime is not None and self._last_rate_ts is not None:
-            dt = max(1.0, time.time() - self._last_rate_ts)
-            dq = max(0, self.total_queries_lifetime - self._last_total_queries_lifetime)
-            self.pihole_request_rate.labels(host).set(dq / dt)
-            logger.debug("Request rate queries_delta=%d time_delta=%.3f rate=%.6f", dq, dt, dq / dt)
-        else:
-            self.pihole_request_rate.labels(host).set(0.0)
-            logger.debug("Request rate initialized to 0.0")
-
-        self._last_total_queries_lifetime = self.total_queries_lifetime
-        self._last_rate_ts = time.time()
+        self._load_domains_blocked(host)
+        self._update_request_rate(host)
 
 
 def make_handler(scraper: Scraper):
