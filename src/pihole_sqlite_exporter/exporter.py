@@ -323,6 +323,7 @@ class Scraper:
         self._last_rate_ts = time.time()
 
     def scrape_and_update(self) -> None:
+        start = time.time()
         host = self.config.hostname_label
         tz = get_tz(self.config.exporter_tz)
         sod = start_of_day_ts(tz)
@@ -359,8 +360,17 @@ class Scraper:
             self._load_synthetic_destinations(cur, host, sod, blocked_list)
             self._load_top_lists(cur, host, sod, blocked_list)
 
+        ftl_elapsed = time.time() - start
+
         self._load_domains_blocked(host)
         self._update_request_rate(host)
+        total_elapsed = time.time() - start
+        logger.debug(
+            "Scrape finished in %.3fs (ftl=%.3fs, gravity=%.3fs)",
+            total_elapsed,
+            ftl_elapsed,
+            total_elapsed - ftl_elapsed,
+        )
 
 
 def make_handler(scraper: Scraper):
