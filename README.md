@@ -2,6 +2,13 @@
 
 Prometheus exporter that reads Pi-hole metrics from **pihole-FTL.db** (and optionally **gravity.db**) without using the Pi-hole API.
 
+## Repository Overview
+<!-- overview:start -->
+Docker image: hardened minimal runtime (non-root by default) with an HTTP healthcheck on `/metrics`. Published to Docker Hub: https://hub.docker.com/r/merlijntishauser/pihole-sqlite-exporter  
+GitHub repo: https://github.com/merlijntishauser/pihole-sqlite-exporter  
+Scan summary: pending (generated on release tags).
+<!-- overview:end -->
+
 ## Why
 - No HTTP API calls to Pi-hole
 - No auth / TLS / timeouts / hanging requests
@@ -121,3 +128,4 @@ make docker-verify IMAGE_NAME=merlijntishauser/pihole-sqlite-exporter
 - Docker Hub releases are automated on `vX.Y.Z` tags (multi-arch: amd64/arm64) and run Dockle + Trivy checks. Set `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` secrets.
 - GitHub Actions also needs `DHI_USERNAME` and `DHI_TOKEN` to pull the base image from `dhi.io`.
 - If you hit `sqlite3.OperationalError: unable to open database file`, it is usually a volume path or permissions issue. On NAS systems you may need to run the container as root (`user: "0:0"`) or adjust the host file ownership/permissions so the container user can read `/etc/pihole/pihole-FTL.db`.
+- The repository overview and Docker Hub description are updated automatically on release tags with the latest Dockle/Trivy scan summaries.
