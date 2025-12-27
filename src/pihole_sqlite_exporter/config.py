@@ -15,6 +15,7 @@ class Config:
     scrape_interval: int
     exporter_tz: str
     enable_lifetime_dest_counters: bool
+    request_rate_window_sec: int = 60
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -26,6 +27,7 @@ class Config:
             hostname_label=os.getenv("HOSTNAME_LABEL", "host.docker.internal"),
             top_n=int(os.getenv("TOP_N", "10")),
             scrape_interval=int(os.getenv("SCRAPE_INTERVAL", "15")),
+            request_rate_window_sec=int(os.getenv("REQUEST_RATE_WINDOW_SEC", "60")),
             exporter_tz=os.getenv("EXPORTER_TZ", "Europe/Amsterdam"),
             enable_lifetime_dest_counters=env_truthy("ENABLE_LIFETIME_DEST_COUNTERS", "true"),
         )

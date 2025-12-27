@@ -28,6 +28,7 @@ from .queries import (
     SQL_QUERIES_TODAY,
     SQL_QUERY_TYPES,
     SQL_REPLY_TYPES,
+    SQL_REQUEST_RATE_WINDOW,
     SQL_TOP_ADS,
     SQL_TOP_QUERIES,
     SQL_TOP_SOURCES,
@@ -309,18 +310,13 @@ class Scraper:
 
         self.gauges.domains_being_blocked.labels(host).set(float(domains_value))
 
-    def _update_request_rate(self, host: str) -> None:
-        if self._last_total_queries_lifetime is not None and self._last_rate_ts is not None:
-            dt = max(1.0, time.time() - self._last_rate_ts)
-            dq = max(0, self.total_queries_lifetime - self._last_total_queries_lifetime)
-            self.gauges.request_rate.labels(host).set(dq / dt)
-            logger.debug("Request rate queries_delta=%d time_delta=%.3f rate=%.6f", dq, dt, dq / dt)
-        else:
-            self.gauges.request_rate.labels(host).set(0.0)
-            logger.debug("Request rate initialized to 0.0")
-
-        self._last_total_queries_lifetime = self.total_queries_lifetime
-        self._last_rate_ts = time.time()
+    def _update_request_rate(self, cur: sqlite3.Cursor, host: str, now: int) -> None:
+        window = max(1, self.config.request_rate_window_sec)
+        cur.execute(SQL_REQUEST_RATE_WINDOW, (now - window,))
+        count = int(cur.fetchone()[0])
+        rate = count / float(window)
+        self.gauges.request_rate.labels(host).set(rate)
+        logger.debug("Request rate window=%ds count=%d rate=%.6f", window, count, rate)
 
     def scrape_and_update(self) -> None:
         start = time.time()
@@ -359,11 +355,11 @@ class Scraper:
             self._load_forward_destinations(cur, host, sod)
             self._load_synthetic_destinations(cur, host, sod, blocked_list)
             self._load_top_lists(cur, host, sod, blocked_list)
+            self._update_request_rate(cur, host, now)
 
         ftl_elapsed = time.time() - start
 
         self._load_domains_blocked(host)
-        self._update_request_rate(host)
         total_elapsed = time.time() - start
         logger.debug(
             "Scrape finished in %.3fs (ftl=%.3fs, gravity=%.3fs)",

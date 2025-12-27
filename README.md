@@ -36,6 +36,7 @@ Exposes, among others:
 | LISTEN_ADDR | 0.0.0.0 | bind address |
 | LISTEN_PORT | 9617 | bind port |
 | TOP_N | 10 | top list size |
+| REQUEST_RATE_WINDOW_SEC | 60 | seconds window for pihole_request_rate |
 | DEBUG | false | enable debug logging |
 
 ## CLI

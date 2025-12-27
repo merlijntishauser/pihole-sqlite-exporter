@@ -13,6 +13,7 @@ def _make_config(
     hostname: str = "test-host",
     tz: str = "UTC",
     lifetime: bool = False,
+    request_rate_window_sec: int = 60,
 ) -> exp.Config:
     return exp.Config(
         ftl_db_path=ftl_path,
@@ -22,6 +23,7 @@ def _make_config(
         hostname_label=hostname,
         top_n=10,
         scrape_interval=15,
+        request_rate_window_sec=request_rate_window_sec,
         exporter_tz=tz,
         enable_lifetime_dest_counters=lifetime,
     )
@@ -32,15 +34,37 @@ def _make_config(
     [
         ("pihole_dns_queries_today", 3.0),
         ("pihole_ads_blocked_today", 1.0),
-        ("pihole_ads_percentage_today", pytest.approx(100.0 / 3.0)),
         ("pihole_queries_forwarded", 1.0),
         ("pihole_queries_cached", 1.0),
         ("pihole_domains_being_blocked", 4.0),
-        ("pihole_request_rate", 0.0),
     ],
 )
 def test_scrape_metrics(metric: str, expected, metrics_text: str, metric_value) -> None:
     assert metric_value(metrics_text, metric, {"hostname": "test-host"}) == expected
+
+
+def test_ads_percentage_today(metrics_text: str, metric_value) -> None:
+    assert metric_value(
+        metrics_text, "pihole_ads_percentage_today", {"hostname": "test-host"}
+    ) == pytest.approx(100.0 / 3.0)
+
+
+def test_request_rate_uses_window(ftl_db_factory, metric_value) -> None:
+    now_ts = int(time.time())
+    queries = [
+        (now_ts - 10, 2, 1, 3, "1.1.1.1", 0.1, "example.com", "10.0.0.1"),
+        (now_ts - 20, 3, 2, 2, None, None, "cached.com", "10.0.0.2"),
+        (now_ts - 30, 1, 1, 2, None, None, "ads.com", "10.0.0.1"),
+    ]
+    ftl_path = ftl_db_factory(queries=queries)
+    config = _make_config(str(ftl_path), str(ftl_path), request_rate_window_sec=60)
+    scraper = exp.Scraper(config)
+
+    scraper.refresh()
+    metrics = generate_latest(scraper.registry).decode("utf-8")
+    assert metric_value(metrics, "pihole_request_rate", {"hostname": "test-host"}) == pytest.approx(
+        3.0 / 60.0
+    )
 
 
 def test_scrape_falls_back_when_gravity_missing(ftl_db_factory, tmp_path, metric_value) -> None:
@@ -58,7 +82,7 @@ def test_request_rate_after_second_scrape(
     ftl_db_factory, update_counters, metric_value, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ftl_path = ftl_db_factory(counters=(5, 1))
-    config = _make_config(str(ftl_path), str(ftl_path))
+    config = _make_config(str(ftl_path), str(ftl_path), request_rate_window_sec=60)
     scraper = exp.Scraper(config)
 
     base_time = time.time()
@@ -71,7 +95,7 @@ def test_request_rate_after_second_scrape(
 
     metrics = generate_latest(scraper.registry).decode("utf-8")
     assert metric_value(metrics, "pihole_request_rate", {"hostname": "test-host"}) == pytest.approx(
-        0.2
+        3.0 / 60.0
     )
 
 

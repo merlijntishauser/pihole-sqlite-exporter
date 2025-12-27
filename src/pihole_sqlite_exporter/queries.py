@@ -80,6 +80,11 @@ SQL_TOP_SOURCES = """
     ORDER BY cnt DESC
     LIMIT {top_n};
 """
+SQL_REQUEST_RATE_WINDOW = """
+    SELECT COUNT(*)
+    FROM queries
+    WHERE timestamp >= ?;
+"""
 SQL_GRAVITY_COUNT = "SELECT COUNT(*) FROM gravity;"
 SQL_DOMAIN_BY_ID_COUNT = "SELECT COUNT(*) FROM domain_by_id;"
 
@@ -105,4 +110,5 @@ __all__ = [
     "SQL_TOP_SOURCES",
     "SQL_GRAVITY_COUNT",
     "SQL_DOMAIN_BY_ID_COUNT",
+    "SQL_REQUEST_RATE_WINDOW",
 ]
