@@ -43,6 +43,15 @@ jobs:
           flavor: |
             latest=true
 
+      - name: Build image for scans
+        run: docker build -f docker/Dockerfile.alpine -t scan-image:${{ github.sha }} .
+
+      - name: Dockle scan
+        run: docker run --rm -v /var/run/docker.sock:/var/run/docker.sock goodwithtech/dockle:latest scan-image:${{ github.sha }}
+
+      - name: Trivy scan
+        run: docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest image scan-image:${{ github.sha }}
+
       - name: Build and push
         uses: docker/build-push-action@v6
         with:

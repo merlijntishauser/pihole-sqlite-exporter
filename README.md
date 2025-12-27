@@ -118,6 +118,6 @@ make docker-verify IMAGE_NAME=merlijntishauser/pihole-sqlite-exporter
 - domains_being_blocked prefers gravity.db (gravity table). If missing, it falls back to domain_by_id (less precise).
 - Disclaimer: AI assistance was used while writing parts of the codebase.
 - Docker image base uses `dhi.io/python:3-alpine3.22` by default (override via `PYTHON_BASE_IMAGE` build arg).
-- Docker Hub releases are automated on `vX.Y.Z` tags (multi-arch: amd64/arm64). Set `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` secrets.
+- Docker Hub releases are automated on `vX.Y.Z` tags (multi-arch: amd64/arm64) and run Dockle + Trivy checks. Set `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` secrets.
 - GitHub Actions also needs `DHI_USERNAME` and `DHI_TOKEN` to pull the base image from `dhi.io`.
 - If you hit `sqlite3.OperationalError: unable to open database file`, it is usually a volume path or permissions issue. On NAS systems you may need to run the container as root (`user: "0:0"`) or adjust the host file ownership/permissions so the container user can read `/etc/pihole/pihole-FTL.db`.
