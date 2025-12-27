@@ -130,3 +130,4 @@ make docker-verify IMAGE_NAME=merlijntishauser/pihole-sqlite-exporter
 - GitHub Actions also needs `DHI_USERNAME` and `DHI_TOKEN` to pull the base image from `dhi.io`.
 - If you hit `sqlite3.OperationalError: unable to open database file`, it is usually a volume path or permissions issue. On NAS systems you may need to run the container as root (`user: "0:0"`) or adjust the host file ownership/permissions so the container user can read `/etc/pihole/pihole-FTL.db`.
 - The repository overview and Docker Hub description are updated automatically on release tags with the latest Dockle/Trivy scan summaries.
+- Contributing guide: `CONTRIBUTING.md`.
