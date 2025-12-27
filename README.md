@@ -7,7 +7,7 @@ Prometheus exporter that reads Pi-hole metrics from **pihole-FTL.db** (and optio
 - **Docker image:** hardened minimal runtime (non-root by default) with an HTTP healthcheck on `/metrics`.
 - **Docker Hub:** https://hub.docker.com/r/merlijntishauser/pihole-sqlite-exporter
 - **GitHub:** https://github.com/merlijntishauser/pihole-sqlite-exporter
-- **Scan summary (2025-12-27 10:57 UTC):** Dockle: no findings reported. Trivy: 0 vulnerabilities detected.
+- **Scan summary (2025-12-27 12:28 UTC):** Dockle: INFO=2, PASS=15. Trivy: 0 vulnerabilities detected.
 <!-- overview:end -->
 
 ## Why
