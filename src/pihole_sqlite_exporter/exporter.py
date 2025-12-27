@@ -1,5 +1,6 @@
 import argparse
 import logging
+import sqlite3
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -329,7 +330,7 @@ class Scraper:
         self.pihole_forward_destinations_responsetime.clear()
         self.pihole_forward_destinations_responsevariance.clear()
 
-    def _load_counters(self, cur, host: str) -> None:
+    def _load_counters(self, cur: sqlite3.Cursor, host: str) -> None:
         self.pihole_status.labels(host).set(1)
 
         cur.execute(SQL_COUNTER_TOTAL)
@@ -344,7 +345,7 @@ class Scraper:
             self.blocked_queries_lifetime,
         )
 
-    def _load_lifetime_destinations(self, cur, blocked_list: str) -> None:
+    def _load_lifetime_destinations(self, cur: sqlite3.Cursor, blocked_list: str) -> None:
         if self.config.enable_lifetime_dest_counters:
             lifetime = {}
             cur.execute(SQL_LIFETIME_FORWARD_DESTS)
@@ -365,11 +366,13 @@ class Scraper:
         else:
             self.forward_destinations_lifetime = {}
 
-    def _load_clients_ever_seen(self, cur, host: str) -> None:
+    def _load_clients_ever_seen(self, cur: sqlite3.Cursor, host: str) -> None:
         cur.execute(SQL_CLIENTS_EVER_SEEN)
         self.pihole_clients_ever_seen.labels(host).set(float(cur.fetchone()[0]))
 
-    def _load_queries_today(self, cur, host: str, sod: int, blocked_list: str) -> None:
+    def _load_queries_today(
+        self, cur: sqlite3.Cursor, host: str, sod: int, blocked_list: str
+    ) -> None:
         cur.execute(SQL_QUERIES_TODAY, (sod,))
         q_today = int(cur.fetchone()[0])
 
@@ -383,14 +386,14 @@ class Scraper:
             (b_today / q_today * 100.0) if q_today > 0 else 0.0
         )
 
-    def _load_unique_counts(self, cur, host: str, now: int) -> None:
+    def _load_unique_counts(self, cur: sqlite3.Cursor, host: str, now: int) -> None:
         cur.execute(SQL_UNIQUE_CLIENTS, (now - 86400,))
         self.pihole_unique_clients.labels(host).set(float(cur.fetchone()[0]))
 
         cur.execute(SQL_UNIQUE_DOMAINS, (now - 86400,))
         self.pihole_unique_domains.labels(host).set(float(cur.fetchone()[0]))
 
-    def _load_query_types(self, cur, host: str, sod: int) -> None:
+    def _load_query_types(self, cur: sqlite3.Cursor, host: str, sod: int) -> None:
         cur.execute(SQL_QUERY_TYPES, (sod,))
         counts_by_type = {k: 0 for k in QUERY_TYPE_MAP.keys()}
         for t, c in cur.fetchall():
@@ -399,7 +402,7 @@ class Scraper:
         for tid, name in QUERY_TYPE_MAP.items():
             self.pihole_querytypes.labels(host, name).set(float(counts_by_type.get(tid, 0)))
 
-    def _load_reply_types(self, cur, host: str, sod: int) -> None:
+    def _load_reply_types(self, cur: sqlite3.Cursor, host: str, sod: int) -> None:
         cur.execute(SQL_REPLY_TYPES, (sod,))
         counts_by_reply = {k: 0 for k in REPLY_TYPE_MAP.keys()}
         for rt, c in cur.fetchall():
@@ -410,14 +413,14 @@ class Scraper:
         for rid, label in REPLY_TYPE_MAP.items():
             self.pihole_reply.labels(host, label).set(float(counts_by_reply.get(rid, 0)))
 
-    def _load_cache_forwarded(self, cur, host: str, sod: int) -> None:
+    def _load_cache_forwarded(self, cur: sqlite3.Cursor, host: str, sod: int) -> None:
         cur.execute(SQL_FORWARDED_TODAY, (sod,))
         self.pihole_queries_forwarded.labels(host).set(float(cur.fetchone()[0]))
 
         cur.execute(SQL_CACHED_TODAY, (sod,))
         self.pihole_queries_cached.labels(host).set(float(cur.fetchone()[0]))
 
-    def _load_forward_destinations(self, cur, host: str, sod: int) -> None:
+    def _load_forward_destinations(self, cur: sqlite3.Cursor, host: str, sod: int) -> None:
         cur.execute(SQL_FORWARD_DESTS_TODAY, (sod,))
         forwards = cur.fetchall()
 
@@ -434,7 +437,9 @@ class Scraper:
                 float(variance(vals))
             )
 
-    def _load_synthetic_destinations(self, cur, host: str, sod: int, blocked_list: str) -> None:
+    def _load_synthetic_destinations(
+        self, cur: sqlite3.Cursor, host: str, sod: int, blocked_list: str
+    ) -> None:
         cur.execute(SQL_CACHED_TODAY, (sod,))
         cache_cnt = int(cur.fetchone()[0])
         self.pihole_forward_destinations.labels(host, "cache", "cache").set(float(cache_cnt))
@@ -451,7 +456,7 @@ class Scraper:
             host, "blocklist", "blocklist"
         ).set(0.0)
 
-    def _load_top_lists(self, cur, host: str, sod: int, blocked_list: str) -> None:
+    def _load_top_lists(self, cur: sqlite3.Cursor, host: str, sod: int, blocked_list: str) -> None:
         cur.execute(SQL_TOP_ADS.format(blocked_list=blocked_list, top_n=self.config.top_n), (sod,))
         for domain, cnt in cur.fetchall():
             self.pihole_top_ads.labels(host, str(domain)).set(float(cnt))
