@@ -46,8 +46,7 @@ def test_handler_returns_500_on_scrape_error(config: exp.Config) -> None:
 
 def test_handler_uses_cached_payload(config: exp.Config) -> None:
     scraper = exp.Scraper(config)
-    scraper._payload = b"cached"  # type: ignore[attr-defined]
-    scraper._payload_ts = 123.0  # type: ignore[attr-defined]
+    scraper._cache.set(b"cached", 123.0)
 
     def _raise():
         raise RuntimeError("boom")

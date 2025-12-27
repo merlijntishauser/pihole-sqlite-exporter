@@ -5,10 +5,35 @@ import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from prometheus_client import CONTENT_TYPE_LATEST, CollectorRegistry, Gauge, generate_latest
+from prometheus_client import CONTENT_TYPE_LATEST, CollectorRegistry, generate_latest
 
 from .config import Config
+from .gauges import Gauges
 from .metrics import PiholeDestTotalsCollector, PiholeTotalsCollector
+from .payload_cache import PayloadCache
+from .queries import (
+    SQL_BLOCKED_TODAY,
+    SQL_CACHED_TODAY,
+    SQL_CLIENTS_EVER_SEEN,
+    SQL_COUNTER_BLOCKED,
+    SQL_COUNTER_TOTAL,
+    SQL_DOMAIN_BY_ID_COUNT,
+    SQL_FORWARD_DESTS_TODAY,
+    SQL_FORWARD_REPLY_TIMES,
+    SQL_FORWARDED_TODAY,
+    SQL_GRAVITY_COUNT,
+    SQL_LIFETIME_BLOCKED,
+    SQL_LIFETIME_CACHE,
+    SQL_LIFETIME_FORWARD_DESTS,
+    SQL_QUERIES_TODAY,
+    SQL_QUERY_TYPES,
+    SQL_REPLY_TYPES,
+    SQL_TOP_ADS,
+    SQL_TOP_QUERIES,
+    SQL_TOP_SOURCES,
+    SQL_UNIQUE_CLIENTS,
+    SQL_UNIQUE_DOMAINS,
+)
 from .utils import env_truthy, get_tz, now_ts, sqlite_ro, start_of_day_ts, variance
 
 # ----------------------------
@@ -63,91 +88,6 @@ REPLY_TYPE_MAP = {
     13: "blob",  # BLOB
 }
 
-SQL_COUNTER_TOTAL = "SELECT value FROM counters WHERE id = 0;"
-SQL_COUNTER_BLOCKED = "SELECT value FROM counters WHERE id = 1;"
-SQL_LIFETIME_FORWARD_DESTS = """
-    SELECT forward, COUNT(*)
-    FROM queries
-    WHERE status = 2
-      AND forward IS NOT NULL
-    GROUP BY forward;
-"""
-SQL_LIFETIME_CACHE = "SELECT COUNT(*) FROM queries WHERE status = 3;"
-SQL_LIFETIME_BLOCKED = "SELECT COUNT(*) FROM queries WHERE status IN ({blocked_list});"
-SQL_CLIENTS_EVER_SEEN = "SELECT COUNT(*) FROM client_by_id;"
-SQL_QUERIES_TODAY = """
-    SELECT COUNT(*)
-    FROM queries
-    WHERE timestamp >= ?;
-"""
-SQL_BLOCKED_TODAY = """
-    SELECT COUNT(*)
-    FROM queries
-    WHERE timestamp >= ?
-      AND status IN ({blocked_list});
-"""
-SQL_UNIQUE_CLIENTS = "SELECT COUNT(DISTINCT client) FROM queries WHERE timestamp >= ?;"
-SQL_UNIQUE_DOMAINS = "SELECT COUNT(DISTINCT domain) FROM queries WHERE timestamp >= ?;"
-SQL_QUERY_TYPES = """
-    SELECT type, COUNT(*)
-    FROM queries
-    WHERE timestamp >= ?
-    GROUP BY type;
-"""
-SQL_REPLY_TYPES = """
-    SELECT reply_type, COUNT(*)
-    FROM queries
-    WHERE timestamp >= ?
-    GROUP BY reply_type;
-"""
-SQL_FORWARDED_TODAY = "SELECT COUNT(*) FROM queries WHERE timestamp >= ? AND status = 2;"
-SQL_CACHED_TODAY = "SELECT COUNT(*) FROM queries WHERE timestamp >= ? AND status = 3;"
-SQL_FORWARD_DESTS_TODAY = """
-    SELECT forward, COUNT(*), AVG(reply_time)
-    FROM queries
-    WHERE timestamp >= ?
-      AND status = 2
-      AND forward IS NOT NULL
-    GROUP BY forward
-    ORDER BY COUNT(*) DESC;
-"""
-SQL_FORWARD_REPLY_TIMES = """
-    SELECT reply_time
-    FROM queries
-    WHERE timestamp >= ?
-      AND status = 2
-      AND forward = ?
-      AND reply_time IS NOT NULL;
-"""
-SQL_TOP_ADS = """
-    SELECT domain, COUNT(*) AS cnt
-    FROM queries
-    WHERE timestamp >= ?
-      AND status IN ({blocked_list})
-    GROUP BY domain
-    ORDER BY cnt DESC
-    LIMIT {top_n};
-"""
-SQL_TOP_QUERIES = """
-    SELECT domain, COUNT(*) AS cnt
-    FROM queries
-    WHERE timestamp >= ?
-    GROUP BY domain
-    ORDER BY cnt DESC
-    LIMIT {top_n};
-"""
-SQL_TOP_SOURCES = """
-    SELECT q.client, COALESCE(c.name,''), COUNT(*) AS cnt
-    FROM queries q
-    LEFT JOIN client_by_id c ON c.ip = q.client
-    WHERE q.timestamp >= ?
-    GROUP BY q.client, c.name
-    ORDER BY cnt DESC
-    LIMIT {top_n};
-"""
-SQL_GRAVITY_COUNT = "SELECT COUNT(*) FROM gravity;"
-SQL_DOMAIN_BY_ID_COUNT = "SELECT COUNT(*) FROM domain_by_id;"
-
 
 class Scraper:
     def __init__(self, config: Config) -> None:
@@ -161,150 +101,21 @@ class Scraper:
         self._last_rate_ts: float | None = None
 
         self._scrape_lock = threading.Lock()
-        self._payload_lock = threading.Lock()
-        self._payload: bytes | None = None
-        self._payload_ts: float | None = None
-        self._last_error: str | None = None
+        self._cache = PayloadCache()
 
         self.registry.register(PiholeTotalsCollector(self))
         self.registry.register(PiholeDestTotalsCollector(self))
 
-        self.pihole_ads_blocked_today = Gauge(
-            "pihole_ads_blocked_today",
-            "Represents the number of ads blocked over the current day",
-            ["hostname"],
-            registry=self.registry,
-        )
-        self.pihole_ads_percentage_today = Gauge(
-            "pihole_ads_percentage_today",
-            "Represents the percentage of ads blocked over the current day",
-            ["hostname"],
-            registry=self.registry,
-        )
-        self.pihole_clients_ever_seen = Gauge(
-            "pihole_clients_ever_seen",
-            "Represents the number of clients ever seen",
-            ["hostname"],
-            registry=self.registry,
-        )
-        self.pihole_dns_queries_all_types = Gauge(
-            "pihole_dns_queries_all_types",
-            "Represents the number of DNS queries across all types",
-            ["hostname"],
-            registry=self.registry,
-        )
-        self.pihole_dns_queries_today = Gauge(
-            "pihole_dns_queries_today",
-            "Represents the number of DNS queries made over the current day",
-            ["hostname"],
-            registry=self.registry,
-        )
-        self.pihole_domains_being_blocked = Gauge(
-            "pihole_domains_being_blocked",
-            "Represents the number of domains being blocked",
-            ["hostname"],
-            registry=self.registry,
-        )
-        self.pihole_forward_destinations = Gauge(
-            "pihole_forward_destinations",
-            "Represents the number of forward destination requests made by Pi-hole by destination",
-            ["hostname", "destination", "destination_name"],
-            registry=self.registry,
-        )
-        self.pihole_forward_destinations_responsetime = Gauge(
-            "pihole_forward_destinations_responsetime",
-            (
-                "Represents the seconds a forward destination took to process a request made by "
-                "Pi-hole"
-            ),
-            ["hostname", "destination", "destination_name"],
-            registry=self.registry,
-        )
-        self.pihole_forward_destinations_responsevariance = Gauge(
-            "pihole_forward_destinations_responsevariance",
-            "Represents the variance in response time for forward destinations",
-            ["hostname", "destination", "destination_name"],
-            registry=self.registry,
-        )
-        self.pihole_queries_cached = Gauge(
-            "pihole_queries_cached",
-            "Represents the number of cached queries",
-            ["hostname"],
-            registry=self.registry,
-        )
-        self.pihole_queries_forwarded = Gauge(
-            "pihole_queries_forwarded",
-            "Represents the number of forwarded queries",
-            ["hostname"],
-            registry=self.registry,
-        )
-        self.pihole_querytypes = Gauge(
-            "pihole_querytypes",
-            "Represents the number of queries made by Pi-hole by type",
-            ["hostname", "type"],
-            registry=self.registry,
-        )
-        self.pihole_reply = Gauge(
-            "pihole_reply",
-            "Represents the number of replies by type",
-            ["hostname", "type"],
-            registry=self.registry,
-        )
-        self.pihole_request_rate = Gauge(
-            "pihole_request_rate",
-            "Represents the number of requests per second",
-            ["hostname"],
-            registry=self.registry,
-        )
-        self.pihole_status = Gauge(
-            "pihole_status",
-            "Whether Pi-hole is enabled",
-            ["hostname"],
-            registry=self.registry,
-        )
-        self.pihole_top_ads = Gauge(
-            "pihole_top_ads",
-            "Represents the number of top ads by domain",
-            ["hostname", "domain"],
-            registry=self.registry,
-        )
-        self.pihole_top_queries = Gauge(
-            "pihole_top_queries",
-            "Represents the number of top queries by domain",
-            ["hostname", "domain"],
-            registry=self.registry,
-        )
-        self.pihole_top_sources = Gauge(
-            "pihole_top_sources",
-            "Represents the number of top sources by source host",
-            ["hostname", "source", "source_name"],
-            registry=self.registry,
-        )
-        self.pihole_unique_clients = Gauge(
-            "pihole_unique_clients",
-            "Represents the number of unique clients seen in the last 24h",
-            ["hostname"],
-            registry=self.registry,
-        )
-        self.pihole_unique_domains = Gauge(
-            "pihole_unique_domains",
-            "Represents the number of unique domains seen",
-            ["hostname"],
-            registry=self.registry,
-        )
+        self.gauges = Gauges.create(self.registry)
 
     def refresh(self) -> None:
         with self._scrape_lock:
             self.scrape_and_update()
             payload = generate_latest(self.registry)
-        with self._payload_lock:
-            self._payload = payload
-            self._payload_ts = time.time()
-            self._last_error = None
+        self._cache.set(payload, time.time())
 
     def get_payload(self) -> tuple[bytes | None, str | None]:
-        with self._payload_lock:
-            return self._payload, self._last_error
+        return self._cache.get()
 
     def ensure_payload(self) -> tuple[bytes | None, str | None]:
         payload, err = self.get_payload()
@@ -314,8 +125,7 @@ class Scraper:
             self.refresh()
         except Exception as e:
             msg = f"scrape failed: {e}"
-            with self._payload_lock:
-                self._last_error = msg
+            self._cache.set_error(msg)
             return None, msg
         return self.get_payload()
 
@@ -323,15 +133,10 @@ class Scraper:
         return ",".join(str(x) for x in sorted(BLOCKED_STATUSES))
 
     def _clear_series(self) -> None:
-        self.pihole_top_ads.clear()
-        self.pihole_top_queries.clear()
-        self.pihole_top_sources.clear()
-        self.pihole_forward_destinations.clear()
-        self.pihole_forward_destinations_responsetime.clear()
-        self.pihole_forward_destinations_responsevariance.clear()
+        self.gauges.clear_dynamic_series()
 
     def _load_counters(self, cur: sqlite3.Cursor, host: str) -> None:
-        self.pihole_status.labels(host).set(1)
+        self.gauges.status.labels(host).set(1)
 
         cur.execute(SQL_COUNTER_TOTAL)
         self.total_queries_lifetime = int(cur.fetchone()[0])
@@ -368,30 +173,37 @@ class Scraper:
 
     def _load_clients_ever_seen(self, cur: sqlite3.Cursor, host: str) -> None:
         cur.execute(SQL_CLIENTS_EVER_SEEN)
-        self.pihole_clients_ever_seen.labels(host).set(float(cur.fetchone()[0]))
+        self.gauges.clients_ever_seen.labels(host).set(float(cur.fetchone()[0]))
 
-    def _load_queries_today(
-        self, cur: sqlite3.Cursor, host: str, sod: int, blocked_list: str
-    ) -> None:
+    def _fetch_queries_today(
+        self, cur: sqlite3.Cursor, sod: int, blocked_list: str
+    ) -> tuple[int, int]:
         cur.execute(SQL_QUERIES_TODAY, (sod,))
         q_today = int(cur.fetchone()[0])
 
         cur.execute(SQL_BLOCKED_TODAY.format(blocked_list=blocked_list), (sod,))
         b_today = int(cur.fetchone()[0])
+        return q_today, b_today
 
-        self.pihole_dns_queries_today.labels(host).set(float(q_today))
-        self.pihole_dns_queries_all_types.labels(host).set(float(q_today))
-        self.pihole_ads_blocked_today.labels(host).set(float(b_today))
-        self.pihole_ads_percentage_today.labels(host).set(
+    def _set_queries_today(self, host: str, q_today: int, b_today: int) -> None:
+        self.gauges.dns_queries_today.labels(host).set(float(q_today))
+        self.gauges.dns_queries_all_types.labels(host).set(float(q_today))
+        self.gauges.ads_blocked_today.labels(host).set(float(b_today))
+        self.gauges.ads_percentage_today.labels(host).set(
             (b_today / q_today * 100.0) if q_today > 0 else 0.0
         )
 
-    def _load_unique_counts(self, cur: sqlite3.Cursor, host: str, now: int) -> None:
+    def _fetch_unique_counts(self, cur: sqlite3.Cursor, now: int) -> tuple[int, int]:
         cur.execute(SQL_UNIQUE_CLIENTS, (now - 86400,))
-        self.pihole_unique_clients.labels(host).set(float(cur.fetchone()[0]))
+        unique_clients = int(cur.fetchone()[0])
 
         cur.execute(SQL_UNIQUE_DOMAINS, (now - 86400,))
-        self.pihole_unique_domains.labels(host).set(float(cur.fetchone()[0]))
+        unique_domains = int(cur.fetchone()[0])
+        return unique_clients, unique_domains
+
+    def _set_unique_counts(self, host: str, unique_clients: int, unique_domains: int) -> None:
+        self.gauges.unique_clients.labels(host).set(float(unique_clients))
+        self.gauges.unique_domains.labels(host).set(float(unique_domains))
 
     def _load_query_types(self, cur: sqlite3.Cursor, host: str, sod: int) -> None:
         cur.execute(SQL_QUERY_TYPES, (sod,))
@@ -400,7 +212,7 @@ class Scraper:
             counts_by_type[int(t)] = int(c)
 
         for tid, name in QUERY_TYPE_MAP.items():
-            self.pihole_querytypes.labels(host, name).set(float(counts_by_type.get(tid, 0)))
+            self.gauges.querytypes.labels(host, name).set(float(counts_by_type.get(tid, 0)))
 
     def _load_reply_types(self, cur: sqlite3.Cursor, host: str, sod: int) -> None:
         cur.execute(SQL_REPLY_TYPES, (sod,))
@@ -411,14 +223,19 @@ class Scraper:
             counts_by_reply[int(rt)] = int(c)
 
         for rid, label in REPLY_TYPE_MAP.items():
-            self.pihole_reply.labels(host, label).set(float(counts_by_reply.get(rid, 0)))
+            self.gauges.reply.labels(host, label).set(float(counts_by_reply.get(rid, 0)))
 
-    def _load_cache_forwarded(self, cur: sqlite3.Cursor, host: str, sod: int) -> None:
+    def _fetch_cache_forwarded(self, cur: sqlite3.Cursor, sod: int) -> tuple[int, int]:
         cur.execute(SQL_FORWARDED_TODAY, (sod,))
-        self.pihole_queries_forwarded.labels(host).set(float(cur.fetchone()[0]))
+        forwarded = int(cur.fetchone()[0])
 
         cur.execute(SQL_CACHED_TODAY, (sod,))
-        self.pihole_queries_cached.labels(host).set(float(cur.fetchone()[0]))
+        cached = int(cur.fetchone()[0])
+        return forwarded, cached
+
+    def _set_cache_forwarded(self, host: str, forwarded: int, cached: int) -> None:
+        self.gauges.queries_forwarded.labels(host).set(float(forwarded))
+        self.gauges.queries_cached.labels(host).set(float(cached))
 
     def _load_forward_destinations(self, cur: sqlite3.Cursor, host: str, sod: int) -> None:
         cur.execute(SQL_FORWARD_DESTS_TODAY, (sod,))
@@ -426,14 +243,14 @@ class Scraper:
 
         for fwd, cnt, avg_rt in forwards:
             dest = str(fwd)
-            self.pihole_forward_destinations.labels(host, dest, dest).set(float(cnt))
-            self.pihole_forward_destinations_responsetime.labels(host, dest, dest).set(
+            self.gauges.forward_destinations.labels(host, dest, dest).set(float(cnt))
+            self.gauges.forward_destinations_responsetime.labels(host, dest, dest).set(
                 float(avg_rt or 0.0)
             )
 
             cur.execute(SQL_FORWARD_REPLY_TIMES, (sod, fwd))
             vals = [float(r[0]) for r in cur.fetchall()]
-            self.pihole_forward_destinations_responsevariance.labels(host, dest, dest).set(
+            self.gauges.forward_destinations_responsevariance.labels(host, dest, dest).set(
                 float(variance(vals))
             )
 
@@ -442,32 +259,32 @@ class Scraper:
     ) -> None:
         cur.execute(SQL_CACHED_TODAY, (sod,))
         cache_cnt = int(cur.fetchone()[0])
-        self.pihole_forward_destinations.labels(host, "cache", "cache").set(float(cache_cnt))
-        self.pihole_forward_destinations_responsetime.labels(host, "cache", "cache").set(0.0)
-        self.pihole_forward_destinations_responsevariance.labels(host, "cache", "cache").set(0.0)
+        self.gauges.forward_destinations.labels(host, "cache", "cache").set(float(cache_cnt))
+        self.gauges.forward_destinations_responsetime.labels(host, "cache", "cache").set(0.0)
+        self.gauges.forward_destinations_responsevariance.labels(host, "cache", "cache").set(0.0)
 
         cur.execute(SQL_BLOCKED_TODAY.format(blocked_list=blocked_list), (sod,))
         bl_cnt = int(cur.fetchone()[0])
-        self.pihole_forward_destinations.labels(host, "blocklist", "blocklist").set(float(bl_cnt))
-        self.pihole_forward_destinations_responsetime.labels(host, "blocklist", "blocklist").set(
+        self.gauges.forward_destinations.labels(host, "blocklist", "blocklist").set(float(bl_cnt))
+        self.gauges.forward_destinations_responsetime.labels(host, "blocklist", "blocklist").set(
             0.0
         )
-        self.pihole_forward_destinations_responsevariance.labels(
+        self.gauges.forward_destinations_responsevariance.labels(
             host, "blocklist", "blocklist"
         ).set(0.0)
 
     def _load_top_lists(self, cur: sqlite3.Cursor, host: str, sod: int, blocked_list: str) -> None:
         cur.execute(SQL_TOP_ADS.format(blocked_list=blocked_list, top_n=self.config.top_n), (sod,))
         for domain, cnt in cur.fetchall():
-            self.pihole_top_ads.labels(host, str(domain)).set(float(cnt))
+            self.gauges.top_ads.labels(host, str(domain)).set(float(cnt))
 
         cur.execute(SQL_TOP_QUERIES.format(top_n=self.config.top_n), (sod,))
         for domain, cnt in cur.fetchall():
-            self.pihole_top_queries.labels(host, str(domain)).set(float(cnt))
+            self.gauges.top_queries.labels(host, str(domain)).set(float(cnt))
 
         cur.execute(SQL_TOP_SOURCES.format(top_n=self.config.top_n), (sod,))
         for ip, name, cnt in cur.fetchall():
-            self.pihole_top_sources.labels(host, str(ip), str(name or "")).set(float(cnt))
+            self.gauges.top_sources.labels(host, str(ip), str(name or "")).set(float(cnt))
 
     def _load_domains_blocked(self, host: str) -> None:
         domains_value = None
@@ -490,16 +307,16 @@ class Scraper:
                 logger.warning("Fallback domain count failed: %s", e)
                 domains_value = 0
 
-        self.pihole_domains_being_blocked.labels(host).set(float(domains_value))
+        self.gauges.domains_being_blocked.labels(host).set(float(domains_value))
 
     def _update_request_rate(self, host: str) -> None:
         if self._last_total_queries_lifetime is not None and self._last_rate_ts is not None:
             dt = max(1.0, time.time() - self._last_rate_ts)
             dq = max(0, self.total_queries_lifetime - self._last_total_queries_lifetime)
-            self.pihole_request_rate.labels(host).set(dq / dt)
+            self.gauges.request_rate.labels(host).set(dq / dt)
             logger.debug("Request rate queries_delta=%d time_delta=%.3f rate=%.6f", dq, dt, dq / dt)
         else:
-            self.pihole_request_rate.labels(host).set(0.0)
+            self.gauges.request_rate.labels(host).set(0.0)
             logger.debug("Request rate initialized to 0.0")
 
         self._last_total_queries_lifetime = self.total_queries_lifetime
@@ -528,11 +345,16 @@ class Scraper:
             self._load_counters(cur, host)
             self._load_lifetime_destinations(cur, blocked_list)
             self._load_clients_ever_seen(cur, host)
-            self._load_queries_today(cur, host, sod, blocked_list)
-            self._load_unique_counts(cur, host, now)
+            q_today, b_today = self._fetch_queries_today(cur, sod, blocked_list)
+            self._set_queries_today(host, q_today, b_today)
+
+            unique_clients, unique_domains = self._fetch_unique_counts(cur, now)
+            self._set_unique_counts(host, unique_clients, unique_domains)
             self._load_query_types(cur, host, sod)
             self._load_reply_types(cur, host, sod)
-            self._load_cache_forwarded(cur, host, sod)
+
+            forwarded, cached = self._fetch_cache_forwarded(cur, sod)
+            self._set_cache_forwarded(host, forwarded, cached)
             self._load_forward_destinations(cur, host, sod)
             self._load_synthetic_destinations(cur, host, sod, blocked_list)
             self._load_top_lists(cur, host, sod, blocked_list)

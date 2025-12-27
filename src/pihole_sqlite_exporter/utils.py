@@ -1,7 +1,7 @@
 import logging
 import sqlite3
 import time
-from datetime import datetime
+from datetime import datetime, tzinfo
 from urllib.parse import quote
 from zoneinfo import ZoneInfo
 
@@ -22,7 +22,7 @@ def sqlite_ro(db_path: str) -> sqlite3.Connection:
     return sqlite3.connect(dsn, uri=True)
 
 
-def get_tz(exporter_tz: str):
+def get_tz(exporter_tz: str) -> ZoneInfo | tzinfo:
     try:
         return ZoneInfo(exporter_tz)
     except Exception as e:
@@ -42,7 +42,7 @@ def now_ts() -> int:
     return int(time.time())
 
 
-def variance(values) -> float:
+def variance(values: list[float]) -> float:
     n = len(values)
     if n == 0:
         return 0.0
