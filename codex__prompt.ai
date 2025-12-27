@@ -10,6 +10,9 @@ Project context
 - Docker image uses dhi.io/python:3-alpine3.22 with dependencies installed into /app/vendor.
 - Multi-arch Docker releases via GitHub Actions; Dockle + Trivy scans update README and Docker Hub description.
 - Tests are split into logical modules under tests/.
+- SQL queries live in src/pihole_sqlite_exporter/queries.py.
+- Metrics gauges are defined via src/pihole_sqlite_exporter/gauges.py.
+- Payload cache uses src/pihole_sqlite_exporter/payload_cache.py.
 
 Workflow preferences
 - Use rg for search.
