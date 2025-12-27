@@ -34,9 +34,35 @@ Exposes, among others:
 - `--verbose` enables debug logging.
 
 ## Run (docker compose)
+Pull from Docker Hub:
 ```bash
 cd docker
-docker compose -f docker-compose.example.yml up -d --build
+docker compose -f docker-compose.example.yml up -d
+```
+
+Build locally:
+```bash
+cd docker
+docker compose -f docker-compose.build.yml up -d --build
+```
+
+## Docker Hub
+Image: https://hub.docker.com/r/merlijntishauser/pihole-sqlite-exporter
+
+### Run (docker pull)
+```bash
+docker run -d \
+  --name pihole_sqlite_exporter \
+  -p 9617:9617 \
+  -e HOSTNAME_LABEL=host.docker.internal \
+  -e EXPORTER_TZ=Europe/Amsterdam \
+  -e FTL_DB_PATH=/etc/pihole/pihole-FTL.db \
+  -e GRAVITY_DB_PATH=/etc/pihole/gravity.db \
+  -e LISTEN_ADDR=0.0.0.0 \
+  -e LISTEN_PORT=9617 \
+  -e TOP_N=10 \
+  -v /etc/pihole:/etc/pihole:ro \
+  merlijntishauser/pihole-sqlite-exporter:latest
 ```
 
 ## Test
@@ -79,6 +105,12 @@ make docker-push IMAGE_NAME=youruser/pihole-sqlite-exporter
 For a multi-arch build/push (amd64/arm64):
 ```bash
 make docker-buildx IMAGE_NAME=youruser/pihole-sqlite-exporter
+```
+
+## Local Docker verify
+Build and scan locally with containerized tools:
+```bash
+make docker-verify IMAGE_NAME=merlijntishauser/pihole-sqlite-exporter
 ```
 
 ## Notes

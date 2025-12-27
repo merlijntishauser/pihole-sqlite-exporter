@@ -1,8 +1,10 @@
 VERSION_FILE := VERSION
 VERSION := $(shell cat $(VERSION_FILE))
 IMAGE_NAME ?= pihole-sqlite-exporter
+IMAGE_TAG ?= $(VERSION)
+DOCKER_IMAGE := $(IMAGE_NAME):$(IMAGE_TAG)
 
-.PHONY: version bump-patch bump-minor bump-major tag push-tag release docker-build docker-tag docker-push docker-release docker-buildx
+.PHONY: version bump-patch bump-minor bump-major tag push-tag release docker-build docker-tag docker-push docker-release docker-buildx docker-lint docker-scan docker-verify
 
 version:
 	@echo $(VERSION)
@@ -25,16 +27,24 @@ push-tag:
 release: tag push-tag
 
 docker-build:
-	@docker build -f docker/Dockerfile.alpine -t $(IMAGE_NAME):$(VERSION) .
+	@docker build -f docker/Dockerfile.alpine -t $(DOCKER_IMAGE) .
 
 docker-tag:
-	@docker tag $(IMAGE_NAME):$(VERSION) $(IMAGE_NAME):latest
+	@docker tag $(DOCKER_IMAGE) $(IMAGE_NAME):latest
 
 docker-push:
-	@docker push $(IMAGE_NAME):$(VERSION)
+	@docker push $(DOCKER_IMAGE)
 	@docker push $(IMAGE_NAME):latest
 
 docker-release: docker-build docker-tag docker-push
 
 docker-buildx:
-	@docker buildx build --platform linux/amd64,linux/arm64 -f docker/Dockerfile.alpine -t $(IMAGE_NAME):$(VERSION) -t $(IMAGE_NAME):latest --push .
+	@docker buildx build --platform linux/amd64,linux/arm64 -f docker/Dockerfile.alpine -t $(DOCKER_IMAGE) -t $(IMAGE_NAME):latest --push .
+
+docker-lint:
+	@docker run --rm -v /var/run/docker.sock:/var/run/docker.sock goodwithtech/dockle:latest $(DOCKER_IMAGE)
+
+docker-scan:
+	@docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest image $(DOCKER_IMAGE)
+
+docker-verify: docker-build docker-lint docker-scan

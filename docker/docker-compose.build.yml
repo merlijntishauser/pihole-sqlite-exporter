@@ -1,7 +1,10 @@
 services:
-
   pihole_sqlite_exporter:
-    image: merlijntishauser/pihole-sqlite-exporter:latest
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.alpine
+      args:
+        PYTHON_BASE_IMAGE: dhi.io/python:3-alpine3.22
     container_name: pihole_sqlite_exporter
     restart: unless-stopped
     # Set PUID/PGID in your shell env if you need specific permissions
