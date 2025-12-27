@@ -126,21 +126,29 @@ def gravity_db(tmp_path: Path) -> Path:
 
 
 @pytest.fixture
-def exporter_config(monkeypatch: pytest.MonkeyPatch, ftl_db: Path, gravity_db: Path) -> None:
-    monkeypatch.setattr(exp, "FTL_DB_PATH", str(ftl_db))
-    monkeypatch.setattr(exp, "GRAVITY_DB_PATH", str(gravity_db))
-    monkeypatch.setattr(exp, "HOSTNAME_LABEL", "test-host")
-    monkeypatch.setattr(exp, "EXPORTER_TZ", "UTC")
-    monkeypatch.setattr(exp, "TOP_N", 10)
-    monkeypatch.setattr(exp, "ENABLE_LIFETIME_DEST_COUNTERS", False)
-    monkeypatch.setattr(exp, "_last_total_queries_lifetime", None)
-    monkeypatch.setattr(exp, "_last_rate_ts", None)
+def config(ftl_db: Path, gravity_db: Path) -> exp.Config:
+    return exp.Config(
+        ftl_db_path=str(ftl_db),
+        gravity_db_path=str(gravity_db),
+        listen_addr="127.0.0.1",
+        listen_port=9617,
+        hostname_label="test-host",
+        top_n=10,
+        scrape_interval=15,
+        exporter_tz="UTC",
+        enable_lifetime_dest_counters=False,
+    )
 
 
 @pytest.fixture
-def metrics_text(exporter_config: None) -> str:
-    exp.scrape_and_update()
-    return generate_latest(exp.REGISTRY).decode("utf-8")
+def scraper(config: exp.Config) -> exp.Scraper:
+    return exp.Scraper(config)
+
+
+@pytest.fixture
+def metrics_text(scraper: exp.Scraper) -> str:
+    scraper.refresh()
+    return generate_latest(scraper.registry).decode("utf-8")
 
 
 @pytest.fixture

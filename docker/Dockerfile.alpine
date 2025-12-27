@@ -4,15 +4,14 @@ FROM ${PYTHON_BASE_IMAGE}
 WORKDIR /app
 
 COPY requirements.txt /app/requirements.txt
-RUN ["python3", "-m", "pip", "install", "--no-cache-dir", "--user", "-r", "/app/requirements.txt"]
+RUN ["python3", "-m", "pip", "install", "--no-cache-dir", "--target", "/app/vendor", "-r", "/app/requirements.txt"]
 
 # Copy source
 COPY src /app/src
 
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONPATH=/home/nonroot/.local/lib/python3.14/site-packages:/app/src
-ENV PATH=/home/nonroot/.local/bin:$PATH
+ENV PYTHONPATH=/app/vendor:/app/src
 
 EXPOSE 9617
 
