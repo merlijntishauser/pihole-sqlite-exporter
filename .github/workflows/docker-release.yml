@@ -52,6 +52,11 @@ jobs:
       - name: Trivy scan
         run: docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest image --format json --output trivy.json scan-image:${{ github.sha }}
 
+      - name: Sync main
+        run: |
+          git fetch origin main
+          git rebase origin/main
+
       - name: Update repository overview
         run: python3 scripts/update_overview.py
 
@@ -59,8 +64,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git fetch origin main
-          git rebase origin/main
+          rm -f dockle.json trivy.json
           git add README.md dockerhub-description.md
           if git diff --cached --quiet; then
             echo "No overview changes to commit."
