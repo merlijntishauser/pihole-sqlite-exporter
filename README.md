@@ -25,7 +25,13 @@ Exposes, among others:
 - pihole_forward_destinations (+ response time/variance)
 - pihole_top_ads / top_queries / top_sources
 - pihole_unique_clients / unique_domains
-- pihole_request_rate (delta-based)
+- pihole_request_rate (per-request delta)
+
+## How it works
+- A background loop scrapes SQLite on an interval (`SCRAPE_INTERVAL`) and updates the in-memory registry.
+- `/metrics` serves the latest registry values and computes request rate on-demand.
+- Request rate is calculated from the number of new rows since the previous client request. It uses a row cursor (`rowid` or `id`) when available and falls back to counters if no cursor is available.
+- The exporter logs its version and commit at startup (`VERSION` + `GIT_COMMIT` env).
 
 ## Config (env)
 | Variable | Default | Notes |
@@ -36,7 +42,10 @@ Exposes, among others:
 | LISTEN_ADDR | 0.0.0.0 | bind address |
 | LISTEN_PORT | 9617 | bind port |
 | TOP_N | 10 | top list size |
+| SCRAPE_INTERVAL | 15 | background scrape interval (seconds) |
+| ENABLE_LIFETIME_DEST_COUNTERS | true | scan full queries table for lifetime destinations |
 | DEBUG | false | enable debug logging |
+| GIT_COMMIT | unknown | git commit string for startup log |
 
 ## CLI
 - `--verbose` enables debug logging.
@@ -99,6 +108,7 @@ make docker-buildx IMAGE_NAME=youruser/pihole-sqlite-exporter
 ## Notes
 - Mount /etc/pihole read-only.
 - domains_being_blocked prefers gravity.db (gravity table). If missing, it falls back to domain_by_id (less precise).
+- If request rate looks lower than the Pi-hole UI, reduce Pi-hole's DB flush interval so SQLite updates more frequently.
 - Disclaimer: AI assistance was used while writing parts of the codebase.
 - Docker image base uses `dhi.io/python:3-alpine3.22` by default (override via `PYTHON_BASE_IMAGE` build arg).
 - Docker Hub releases are automated on `vX.Y.Z` tags (multi-arch: amd64/arm64). Set `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` secrets.
