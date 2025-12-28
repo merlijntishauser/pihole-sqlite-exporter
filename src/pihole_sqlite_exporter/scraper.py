@@ -7,6 +7,29 @@ from zoneinfo import ZoneInfo
 
 from . import metrics
 from .db import sqlite_ro
+from .queries import (
+    SQL_BLOCKED_TODAY,
+    SQL_CACHED_TODAY,
+    SQL_CLIENTS_EVER_SEEN,
+    SQL_COUNTER_BLOCKED,
+    SQL_COUNTER_TOTAL,
+    SQL_DOMAIN_BY_ID_COUNT,
+    SQL_FORWARD_DESTS_TODAY,
+    SQL_FORWARD_REPLY_TIMES,
+    SQL_FORWARDED_TODAY,
+    SQL_GRAVITY_COUNT,
+    SQL_LIFETIME_BLOCKED,
+    SQL_LIFETIME_CACHE,
+    SQL_LIFETIME_FORWARD_DESTS,
+    SQL_QUERIES_TODAY,
+    SQL_QUERY_TYPES,
+    SQL_REPLY_TYPES,
+    SQL_TOP_ADS,
+    SQL_TOP_QUERIES,
+    SQL_TOP_SOURCES,
+    SQL_UNIQUE_CLIENTS,
+    SQL_UNIQUE_DOMAINS,
+)
 
 logger = logging.getLogger("pihole_sqlite_exporter")
 
@@ -115,10 +138,10 @@ def scrape_and_update():
 
         metrics.pihole_status.labels(host).set(1)
 
-        cur.execute("SELECT value FROM counters WHERE id = 0;")
+        cur.execute(SQL_COUNTER_TOTAL)
         total_queries_lifetime = int(cur.fetchone()[0])
 
-        cur.execute("SELECT value FROM counters WHERE id = 1;")
+        cur.execute(SQL_COUNTER_BLOCKED)
         blocked_queries_lifetime = int(cur.fetchone()[0])
 
         metrics.set_lifetime_totals(total_queries_lifetime, blocked_queries_lifetime)
@@ -130,22 +153,14 @@ def scrape_and_update():
 
         if ENABLE_LIFETIME_DEST_COUNTERS:
             lifetime = {}
-            cur.execute(
-                """
-                SELECT forward, COUNT(*)
-                FROM queries
-                WHERE status = 2
-                  AND forward IS NOT NULL
-                GROUP BY forward;
-                """
-            )
+            cur.execute(SQL_LIFETIME_FORWARD_DESTS)
             for fwd, cnt in cur.fetchall():
                 lifetime[str(fwd)] = int(cnt)
 
-            cur.execute("SELECT COUNT(*) FROM queries WHERE status = 3;")
+            cur.execute(SQL_LIFETIME_CACHE)
             lifetime["cache"] = int(cur.fetchone()[0])
 
-            cur.execute(f"SELECT COUNT(*) FROM queries WHERE status IN ({blocked_list});")
+            cur.execute(SQL_LIFETIME_BLOCKED.format(blocked_list=blocked_list))
             lifetime["blocklist"] = int(cur.fetchone()[0])
 
             metrics.set_forward_destinations_lifetime(lifetime)
@@ -156,28 +171,13 @@ def scrape_and_update():
         else:
             metrics.set_forward_destinations_lifetime({})
 
-        cur.execute("SELECT COUNT(*) FROM client_by_id;")
+        cur.execute(SQL_CLIENTS_EVER_SEEN)
         metrics.pihole_clients_ever_seen.labels(host).set(float(cur.fetchone()[0]))
 
-        cur.execute(
-            """
-            SELECT COUNT(*)
-            FROM queries
-            WHERE timestamp >= ?;
-            """,
-            (sod,),
-        )
+        cur.execute(SQL_QUERIES_TODAY, (sod,))
         q_today = int(cur.fetchone()[0])
 
-        cur.execute(
-            f"""
-            SELECT COUNT(*)
-            FROM queries
-            WHERE timestamp >= ?
-              AND status IN ({blocked_list});
-            """,
-            (sod,),
-        )
+        cur.execute(SQL_BLOCKED_TODAY.format(blocked_list=blocked_list), (sod,))
         b_today = int(cur.fetchone()[0])
 
         metrics.pihole_dns_queries_today.labels(host).set(float(q_today))
@@ -187,40 +187,20 @@ def scrape_and_update():
             (b_today / q_today * 100.0) if q_today > 0 else 0.0
         )
 
-        cur.execute(
-            "SELECT COUNT(DISTINCT client) FROM queries WHERE timestamp >= ?;", (now - 86400,)
-        )
+        cur.execute(SQL_UNIQUE_CLIENTS, (now - 86400,))
         metrics.pihole_unique_clients.labels(host).set(float(cur.fetchone()[0]))
 
-        cur.execute(
-            "SELECT COUNT(DISTINCT domain) FROM queries WHERE timestamp >= ?;", (now - 86400,)
-        )
+        cur.execute(SQL_UNIQUE_DOMAINS, (now - 86400,))
         metrics.pihole_unique_domains.labels(host).set(float(cur.fetchone()[0]))
 
-        cur.execute(
-            """
-            SELECT type, COUNT(*) AS cnt
-            FROM queries
-            WHERE timestamp >= ?
-            GROUP BY type;
-            """,
-            (sod,),
-        )
+        cur.execute(SQL_QUERY_TYPES, (sod,))
         counts_by_type = {k: 0 for k in QUERY_TYPE_MAP.keys()}
         for t, c in cur.fetchall():
             counts_by_type[int(t)] = int(c)
         for tid, name in QUERY_TYPE_MAP.items():
             metrics.pihole_querytypes.labels(host, name).set(float(counts_by_type.get(tid, 0)))
 
-        cur.execute(
-            """
-            SELECT reply_type, COUNT(*) AS cnt
-            FROM queries
-            WHERE timestamp >= ?
-            GROUP BY reply_type;
-            """,
-            (sod,),
-        )
+        cur.execute(SQL_REPLY_TYPES, (sod,))
         counts_by_reply = {k: 0 for k in REPLY_TYPE_MAP.keys()}
         for rt, c in cur.fetchall():
             if rt is None:
@@ -229,26 +209,16 @@ def scrape_and_update():
         for rid, label in REPLY_TYPE_MAP.items():
             metrics.pihole_reply.labels(host, label).set(float(counts_by_reply.get(rid, 0)))
 
-        cur.execute("SELECT COUNT(*) FROM queries WHERE timestamp >= ? AND status = 2;", (sod,))
+        cur.execute(SQL_FORWARDED_TODAY, (sod,))
         forwarded = int(cur.fetchone()[0])
 
-        cur.execute("SELECT COUNT(*) FROM queries WHERE timestamp >= ? AND status = 3;", (sod,))
+        cur.execute(SQL_CACHED_TODAY, (sod,))
         cached = int(cur.fetchone()[0])
 
         metrics.pihole_queries_forwarded.labels(host).set(float(forwarded))
         metrics.pihole_queries_cached.labels(host).set(float(cached))
 
-        cur.execute(
-            """
-            SELECT forward, COUNT(*) AS cnt, AVG(reply_time) AS avg_rt
-            FROM queries
-            WHERE timestamp >= ?
-              AND status = 2
-              AND forward IS NOT NULL
-            GROUP BY forward;
-            """,
-            (sod,),
-        )
+        cur.execute(SQL_FORWARD_DESTS_TODAY, (sod,))
         forwards = cur.fetchall()
         for fwd, cnt, avg_rt in forwards:
             dest = str(fwd)
@@ -257,36 +227,19 @@ def scrape_and_update():
                 float(avg_rt or 0.0)
             )
 
-            cur.execute(
-                """
-                SELECT reply_time
-                FROM queries
-                WHERE timestamp >= ?
-                  AND status = 2
-                  AND forward = ?
-                  AND reply_time IS NOT NULL;
-                """,
-                (sod, fwd),
-            )
+            cur.execute(SQL_FORWARD_REPLY_TIMES, (sod, fwd))
             vals = [float(r[0]) for r in cur.fetchall()]
             metrics.pihole_forward_destinations_responsevariance.labels(host, dest, dest).set(
                 float(variance(vals))
             )
 
-        cur.execute("SELECT COUNT(*) FROM queries WHERE timestamp >= ? AND status = 3;", (sod,))
+        cur.execute(SQL_CACHED_TODAY, (sod,))
         cache_cnt = int(cur.fetchone()[0])
         metrics.pihole_forward_destinations.labels(host, "cache", "cache").set(float(cache_cnt))
         metrics.pihole_forward_destinations_responsetime.labels(host, "cache", "cache").set(0.0)
         metrics.pihole_forward_destinations_responsevariance.labels(host, "cache", "cache").set(0.0)
 
-        cur.execute(
-            f"""
-            SELECT COUNT(*) FROM queries
-            WHERE timestamp >= ?
-              AND status IN ({blocked_list});
-            """,
-            (sod,),
-        )
+        cur.execute(SQL_BLOCKED_TODAY.format(blocked_list=blocked_list), (sod,))
         bl_cnt = int(cur.fetchone()[0])
         metrics.pihole_forward_destinations.labels(host, "blocklist", "blocklist").set(
             float(bl_cnt)
@@ -298,47 +251,15 @@ def scrape_and_update():
             host, "blocklist", "blocklist"
         ).set(0.0)
 
-        cur.execute(
-            f"""
-            SELECT domain, COUNT(*) AS cnt
-            FROM queries
-            WHERE timestamp >= ?
-              AND status IN ({blocked_list})
-            GROUP BY domain
-            ORDER BY cnt DESC
-            LIMIT {TOP_N};
-            """,
-            (sod,),
-        )
+        cur.execute(SQL_TOP_ADS.format(blocked_list=blocked_list, top_n=TOP_N), (sod,))
         for domain, cnt in cur.fetchall():
             metrics.pihole_top_ads.labels(host, str(domain)).set(float(cnt))
 
-        cur.execute(
-            f"""
-            SELECT domain, COUNT(*) AS cnt
-            FROM queries
-            WHERE timestamp >= ?
-            GROUP BY domain
-            ORDER BY cnt DESC
-            LIMIT {TOP_N};
-            """,
-            (sod,),
-        )
+        cur.execute(SQL_TOP_QUERIES.format(top_n=TOP_N), (sod,))
         for domain, cnt in cur.fetchall():
             metrics.pihole_top_queries.labels(host, str(domain)).set(float(cnt))
 
-        cur.execute(
-            f"""
-            SELECT q.client, COALESCE(c.name,''), COUNT(*) AS cnt
-            FROM queries q
-            LEFT JOIN client_by_id c ON c.ip = q.client
-            WHERE q.timestamp >= ?
-            GROUP BY q.client, c.name
-            ORDER BY cnt DESC
-            LIMIT {TOP_N};
-            """,
-            (sod,),
-        )
+        cur.execute(SQL_TOP_SOURCES.format(top_n=TOP_N), (sod,))
         for ip, name, cnt in cur.fetchall():
             metrics.pihole_top_sources.labels(host, str(ip), str(name or "")).set(float(cnt))
 
@@ -346,7 +267,7 @@ def scrape_and_update():
     try:
         with sqlite_ro(GRAVITY_DB_PATH) as gconn:
             gcur = gconn.cursor()
-            gcur.execute("SELECT COUNT(*) FROM gravity;")
+            gcur.execute(SQL_GRAVITY_COUNT)
             domains_value = int(gcur.fetchone()[0])
     except Exception as e:
         logger.info("Gravity DB unavailable; falling back (reason: %s)", e)
@@ -356,7 +277,7 @@ def scrape_and_update():
         try:
             with sqlite_ro(FTL_DB_PATH) as conn:
                 cur = conn.cursor()
-                cur.execute("SELECT COUNT(*) FROM domain_by_id;")
+                cur.execute(SQL_DOMAIN_BY_ID_COUNT)
                 domains_value = int(cur.fetchone()[0])
         except Exception as e:
             logger.warning("Fallback domain count failed: %s", e)
