@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 from prometheus_client import generate_latest
 
-from pihole_sqlite_exporter import exporter as exp
+from pihole_sqlite_exporter import metrics, scraper
 
 
 def _create_ftl_db(
@@ -149,23 +149,21 @@ def gravity_db(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def exporter_config(monkeypatch: pytest.MonkeyPatch, ftl_db: Path, gravity_db: Path) -> None:
-    monkeypatch.setattr(exp, "FTL_DB_PATH", str(ftl_db))
-    monkeypatch.setattr(exp, "GRAVITY_DB_PATH", str(gravity_db))
-    monkeypatch.setattr(exp, "HOSTNAME_LABEL", "test-host")
-    monkeypatch.setattr(exp, "EXPORTER_TZ", "UTC")
-    monkeypatch.setattr(exp, "TOP_N", 10)
-    monkeypatch.setattr(exp, "ENABLE_LIFETIME_DEST_COUNTERS", False)
-    monkeypatch.setattr(exp, "_last_request_ts", None)
-    monkeypatch.setattr(exp, "_last_request_total", None)
-    monkeypatch.setattr(exp, "_last_request_rowid", None)
-    monkeypatch.setattr(exp, "_request_rate_cursor_col", None)
+    monkeypatch.setattr(scraper, "FTL_DB_PATH", str(ftl_db))
+    monkeypatch.setattr(scraper, "GRAVITY_DB_PATH", str(gravity_db))
+    monkeypatch.setattr(scraper, "HOSTNAME_LABEL", "test-host")
+    monkeypatch.setattr(scraper, "EXPORTER_TZ", "UTC")
+    monkeypatch.setattr(scraper, "TOP_N", 10)
+    monkeypatch.setattr(scraper, "ENABLE_LIFETIME_DEST_COUNTERS", False)
+    metrics.set_hostname_label("test-host")
+    scraper._request_rate.reset()
 
 
 @pytest.fixture
 def metrics_text(exporter_config: None) -> str:
-    exp.scrape_and_update()
-    exp.update_request_rate_for_request()
-    return generate_latest(exp.REGISTRY).decode("utf-8")
+    scraper.scrape_and_update()
+    scraper.update_request_rate_for_request()
+    return generate_latest(metrics.REGISTRY).decode("utf-8")
 
 
 @pytest.fixture
