@@ -5,6 +5,7 @@ services:
       dockerfile: docker/Dockerfile.alpine
       args:
         PYTHON_BASE_IMAGE: dhi.io/python:3-alpine3.22
+        GIT_COMMIT: ${GIT_COMMIT:-unknown}
     container_name: pihole_sqlite_exporter
     restart: unless-stopped
     # Set PUID/PGID in your shell env if you need specific permissions

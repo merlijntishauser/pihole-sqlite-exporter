@@ -42,9 +42,9 @@ def _read_version() -> str:
 
 
 def _read_commit() -> str:
-    return (
-        os.getenv("GIT_COMMIT") or os.getenv("GIT_SHA") or os.getenv("SOURCE_COMMIT") or "unknown"
-    )
+    value = os.getenv("GIT_COMMIT") or os.getenv("GIT_SHA") or os.getenv("SOURCE_COMMIT") or ""
+    value = value.strip()
+    return value or "unknown"
 
 
 def parse_args():
@@ -65,7 +65,12 @@ def main():
     args = parse_args()
     verbose = bool(args.verbose) or _env_truthy("DEBUG", "false")
     configure_logging(verbose)
-    logger.info("Exporter version=%s commit=%s", _read_version(), _read_commit())
+    version = _read_version()
+    commit = _read_commit()
+    if commit == "unknown":
+        logger.info("Exporter version=%s", version)
+    else:
+        logger.info("Exporter version=%s commit=%s", version, commit)
 
     logger.info(
         (

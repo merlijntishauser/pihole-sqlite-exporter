@@ -31,7 +31,7 @@ Exposes, among others:
 - A background loop scrapes SQLite on an interval (`SCRAPE_INTERVAL`) and updates the in-memory registry.
 - `/metrics` serves the latest registry values and computes request rate on-demand.
 - Request rate is calculated from the number of new rows since the previous client request. It uses a row cursor (`rowid` or `id`) when available and falls back to counters if no cursor is available.
-- The exporter logs its version and commit at startup (`VERSION` + `GIT_COMMIT` env).
+- The exporter logs its version at startup and includes commit when `GIT_COMMIT` is set.
 
 ## Config (env)
 | Variable | Default | Notes |
@@ -45,7 +45,7 @@ Exposes, among others:
 | SCRAPE_INTERVAL | 15 | background scrape interval (seconds) |
 | ENABLE_LIFETIME_DEST_COUNTERS | true | scan full queries table for lifetime destinations |
 | DEBUG | false | enable debug logging |
-| GIT_COMMIT | unknown | git commit string for startup log |
+| GIT_COMMIT | (unset) | git commit string for startup log (optional) |
 
 ## CLI
 - `--verbose` enables debug logging.
@@ -62,6 +62,7 @@ Build locally:
 cd docker
 docker compose -f docker-compose.build.yml up -d --build
 ```
+To include the commit in startup logs, set `GIT_COMMIT` before building (for example: `export GIT_COMMIT=$(git rev-parse --short HEAD)`).
 
 ## Test
 ```bash
