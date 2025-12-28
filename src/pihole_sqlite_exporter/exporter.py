@@ -103,15 +103,17 @@ class Scraper:
 
         self._scrape_lock = threading.Lock()
         self._cache = PayloadCache()
+        self._request_lock = threading.Lock()
+        self._last_request_ts: float | None = None
 
         self.registry.register(PiholeTotalsCollector(self))
         self.registry.register(PiholeDestTotalsCollector(self))
 
         self.gauges = Gauges.create(self.registry)
 
-    def refresh(self) -> None:
+    def refresh(self, rate_window_sec: int | None = None) -> None:
         with self._scrape_lock:
-            self.scrape_and_update()
+            self.scrape_and_update(rate_window_sec=rate_window_sec)
             payload = generate_latest(self.registry)
         self._cache.set(payload, time.time())
 
@@ -310,15 +312,18 @@ class Scraper:
 
         self.gauges.domains_being_blocked.labels(host).set(float(domains_value))
 
-    def _update_request_rate(self, cur: sqlite3.Cursor, host: str, now: int) -> None:
-        window = max(1, self.config.request_rate_window_sec)
+    def _update_request_rate(
+        self, cur: sqlite3.Cursor, host: str, now: int, window_override: int | None
+    ) -> None:
+        window = max(1, window_override or self.config.request_rate_window_sec)
         cur.execute(SQL_REQUEST_RATE_WINDOW, (now - window,))
         count = int(cur.fetchone()[0])
         rate = count / float(window)
         self.gauges.request_rate.labels(host).set(rate)
+        self.gauges.request_rate_window_seconds.labels(host).set(float(window))
         logger.debug("Request rate window=%ds count=%d rate=%.6f", window, count, rate)
 
-    def scrape_and_update(self) -> None:
+    def scrape_and_update(self, rate_window_sec: int | None = None) -> None:
         start = time.time()
         host = self.config.hostname_label
         tz = get_tz(self.config.exporter_tz)
@@ -355,7 +360,7 @@ class Scraper:
             self._load_forward_destinations(cur, host, sod)
             self._load_synthetic_destinations(cur, host, sod, blocked_list)
             self._load_top_lists(cur, host, sod, blocked_list)
-            self._update_request_rate(cur, host, now)
+            self._update_request_rate(cur, host, now, rate_window_sec)
 
         ftl_elapsed = time.time() - start
 
@@ -368,6 +373,16 @@ class Scraper:
             total_elapsed - ftl_elapsed,
         )
 
+    def next_request_window(self) -> int:
+        now = time.time()
+        with self._request_lock:
+            if self._last_request_ts is None:
+                window = self.config.request_rate_window_sec
+            else:
+                window = int(now - self._last_request_ts)
+            self._last_request_ts = now
+        return max(1, window)
+
 
 def make_handler(scraper: Scraper):
     class Handler(BaseHTTPRequestHandler):
@@ -379,7 +394,9 @@ def make_handler(scraper: Scraper):
 
             try:
                 logger.info("HTTP request: %s %s", self.command, self.path)
-                payload, err = scraper.ensure_payload()
+                window = scraper.next_request_window()
+                scraper.refresh(rate_window_sec=window)
+                payload, err = scraper.get_payload()
                 if payload is None:
                     msg = (err or "scrape failed") + "\n"
                     body = msg.encode()

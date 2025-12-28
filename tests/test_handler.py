@@ -48,11 +48,28 @@ def test_handler_uses_cached_payload(config: exp.Config) -> None:
     scraper = exp.Scraper(config)
     scraper._cache.set(b"cached", 123.0)
 
-    def _raise():
-        raise RuntimeError("boom")
+    def _noop(*_, **__):
+        return None
 
-    scraper.refresh = _raise  # type: ignore[assignment]
+    scraper.refresh = _noop  # type: ignore[assignment]
     handler_cls = exp.make_handler(scraper)
     handler = _make_dummy_handler(handler_cls, "/metrics")
     handler.do_GET()
     assert handler.sent_status == 200
+
+
+def test_handler_uses_request_window(monkeypatch, config: exp.Config) -> None:
+    scraper = exp.Scraper(config)
+    handler_cls = exp.make_handler(scraper)
+
+    base_time = 1000.0
+    monkeypatch.setattr(exp.time, "time", lambda: base_time)
+    handler = _make_dummy_handler(handler_cls, "/metrics")
+    handler.do_GET()
+
+    monkeypatch.setattr(exp.time, "time", lambda: base_time + 30.0)
+    handler = _make_dummy_handler(handler_cls, "/metrics")
+    handler.do_GET()
+
+    _, err = scraper.get_payload()
+    assert err is None

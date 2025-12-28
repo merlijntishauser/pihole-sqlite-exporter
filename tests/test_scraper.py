@@ -65,6 +65,10 @@ def test_request_rate_uses_window(ftl_db_factory, metric_value) -> None:
     assert metric_value(metrics, "pihole_request_rate", {"hostname": "test-host"}) == pytest.approx(
         3.0 / 60.0
     )
+    assert (
+        metric_value(metrics, "pihole_request_rate_window_seconds", {"hostname": "test-host"})
+        == 60.0
+    )
 
 
 def test_scrape_falls_back_when_gravity_missing(ftl_db_factory, tmp_path, metric_value) -> None:

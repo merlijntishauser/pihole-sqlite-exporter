@@ -19,6 +19,7 @@ class Gauges:
     querytypes: Gauge
     reply: Gauge
     request_rate: Gauge
+    request_rate_window_seconds: Gauge
     status: Gauge
     top_ads: Gauge
     top_queries: Gauge
@@ -116,6 +117,12 @@ class Gauges:
             request_rate=Gauge(
                 "pihole_request_rate",
                 "Represents the number of requests per second",
+                ["hostname"],
+                registry=registry,
+            ),
+            request_rate_window_seconds=Gauge(
+                "pihole_request_rate_window_seconds",
+                "Window size used for pihole_request_rate",
                 ["hostname"],
                 registry=registry,
             ),
