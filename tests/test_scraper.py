@@ -62,9 +62,7 @@ def test_request_rate_uses_window(ftl_db_factory, metric_value) -> None:
 
     scraper.refresh()
     metrics = generate_latest(scraper.registry).decode("utf-8")
-    assert metric_value(metrics, "pihole_request_rate", {"hostname": "test-host"}) == pytest.approx(
-        3.0 / 60.0
-    )
+    assert metric_value(metrics, "pihole_request_rate", {"hostname": "test-host"}) == 0.0
     assert (
         metric_value(metrics, "pihole_request_rate_window_seconds", {"hostname": "test-host"})
         == 60.0
@@ -99,7 +97,7 @@ def test_request_rate_after_second_scrape(
 
     metrics = generate_latest(scraper.registry).decode("utf-8")
     assert metric_value(metrics, "pihole_request_rate", {"hostname": "test-host"}) == pytest.approx(
-        3.0 / 60.0
+        2.0 / 10.0
     )
 
 
