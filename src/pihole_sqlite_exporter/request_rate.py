@@ -12,12 +12,14 @@ class RequestRateTracker:
     last_request_total: int | None = None
     last_request_rowid: int | None = None
     _cursor_col: str | None = None
+    _logged_no_cursor: bool = False
 
     def reset(self) -> None:
         self.last_request_ts = None
         self.last_request_total = None
         self.last_request_rowid = None
         self._cursor_col = None
+        self._logged_no_cursor = False
 
     def _detect_cursor(self, cur: sqlite3.Cursor) -> str | None:
         if self._cursor_col is not None:
@@ -69,6 +71,11 @@ class RequestRateTracker:
                 if cursor_col:
                     cur.execute(f"SELECT MAX({cursor_col}) FROM queries;")
                     latest_cursor = cur.fetchone()[0]
+                elif not self._logged_no_cursor:
+                    logger.warning(
+                        "Request rate cursor unavailable (no rowid/id); falling back to counters"
+                    )
+                    self._logged_no_cursor = True
         except Exception:
             logger.exception("Failed to refresh counters for request rate")
 
