@@ -10,7 +10,12 @@ Thanks for contributing! This project values XP practices: clear naming, readabl
 - **Concurrency:** The HTTP server is single-threaded; background scraping runs in a daemon thread.
 
 ## Code structure
-- `src/pihole_sqlite_exporter/exporter.py`: Scraper + HTTP server orchestration, metrics registry, and request-rate logic.
+- `src/pihole_sqlite_exporter/exporter.py`: CLI entrypoint and orchestration.
+- `src/pihole_sqlite_exporter/scraper.py`: Scrape/update logic and background loop.
+- `src/pihole_sqlite_exporter/http_server.py`: HTTP handler and server wiring.
+- `src/pihole_sqlite_exporter/metrics.py`: Registry, gauges, and collectors.
+- `src/pihole_sqlite_exporter/db.py`: SQLite helpers.
+- `src/pihole_sqlite_exporter/request_rate.py`: Request-rate tracker and cursor detection.
 - `src/pihole_sqlite_exporter/config.py`: Legacy config helper (not used by the current exporter).
 - `tests/`: Unit tests for scrape logic and request rate behavior.
 
