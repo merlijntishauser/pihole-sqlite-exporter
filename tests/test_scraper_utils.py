@@ -1,6 +1,6 @@
 import pytest
 
-from pihole_sqlite_exporter import scraper
+from pihole_sqlite_exporter import metrics, scraper
 
 
 def test_env_truthy_reads_yes(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -32,3 +32,19 @@ def test_variance_simple_series() -> None:
 def test_get_tz_falls_back_on_invalid(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(scraper, "EXPORTER_TZ", "Invalid/Timezone")
     assert scraper.get_tz() is not None
+
+
+def test_scrape_skipped_when_lock_held(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    monkeypatch.setattr(scraper, "HOSTNAME_LABEL", "test-host")
+    metrics.METRICS.set_hostname_label("test-host")
+    metrics.METRICS.state.request_rate.reset()
+
+    scraper._SCRAPE_LOCK.acquire()
+    try:
+        with caplog.at_level("INFO"):
+            scraper.scrape_and_update()
+        assert "Scrape skipped; another scrape is still in progress" in caplog.text
+    finally:
+        scraper._SCRAPE_LOCK.release()

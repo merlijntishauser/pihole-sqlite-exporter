@@ -33,6 +33,7 @@ from .queries import (
 )
 
 logger = logging.getLogger("pihole_sqlite_exporter")
+_SCRAPE_LOCK = threading.Lock()
 
 
 def env_truthy(name: str, default: str = "false") -> bool:
@@ -307,6 +308,9 @@ def _load_domains_blocked(host: str) -> None:
 
 
 def scrape_and_update():
+    if not _SCRAPE_LOCK.acquire(blocking=False):
+        logger.info("Scrape skipped; another scrape is still in progress")
+        return
     host = HOSTNAME_LABEL
     sod = start_of_day_ts()
     now = now_ts()
@@ -336,6 +340,7 @@ def scrape_and_update():
         _load_domains_blocked(host)
         success = 1.0
     finally:
+        _SCRAPE_LOCK.release()
         duration = time.perf_counter() - start
         metrics.METRICS.pihole_scrape_duration_seconds.labels(host).set(duration)
         metrics.METRICS.pihole_scrape_success.labels(host).set(success)
