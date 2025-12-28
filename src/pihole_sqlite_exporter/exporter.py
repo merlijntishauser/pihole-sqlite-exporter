@@ -660,11 +660,35 @@ def scrape_and_update():
     pihole_domains_being_blocked.labels(host).set(float(domains_value))
 
 
+def refresh_counters_only() -> None:
+    global _total_queries_lifetime, _blocked_queries_lifetime
+
+    host = HOSTNAME_LABEL
+    with sqlite_ro(FTL_DB_PATH) as conn:
+        cur = conn.cursor()
+        pihole_status.labels(host).set(1)
+
+        cur.execute("SELECT value FROM counters WHERE id = 0;")
+        _total_queries_lifetime = int(cur.fetchone()[0])
+
+        cur.execute("SELECT value FROM counters WHERE id = 1;")
+        _blocked_queries_lifetime = int(cur.fetchone()[0])
+
+    logger.debug(
+        "FTL counters: total=%d blocked=%d", _total_queries_lifetime, _blocked_queries_lifetime
+    )
+
+
 def update_request_rate_for_request(now: float | None = None) -> None:
     global _last_request_ts, _last_request_total
 
     if now is None:
         now = time.time()
+
+    try:
+        refresh_counters_only()
+    except Exception:
+        logger.exception("Failed to refresh counters for request rate")
 
     host = HOSTNAME_LABEL
     if _last_request_ts is not None and _last_request_total is not None:
