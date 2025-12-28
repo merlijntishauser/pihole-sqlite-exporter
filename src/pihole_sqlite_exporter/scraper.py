@@ -76,6 +76,10 @@ def _blocked_status_list() -> str:
     return ",".join(str(x) for x in sorted(BLOCKED_STATUSES))
 
 
+def _log_context(host: str, sod: int, now: int) -> tuple[str, str, int, int]:
+    return host, SETTINGS.exporter_tz, sod, now
+
+
 def _load_counters(cur: sqlite3.Cursor, host: str) -> tuple[int, int]:
     metrics.METRICS.pihole_status.labels(host).set(1)
 
@@ -247,26 +251,28 @@ def _load_domains_blocked(host: str) -> None:
 
 def scrape_and_update():
     if not _SCRAPE_LOCK.acquire(blocking=False):
+        ctx = _log_context(SETTINGS.hostname_label, start_of_day_ts(), now_ts())
         logger.info(
             "Scrape skipped (host=%s, tz=%s, sod=%s, now=%s); another scrape is still in progress",
-            SETTINGS.hostname_label,
-            SETTINGS.exporter_tz,
-            start_of_day_ts(),
-            now_ts(),
+            ctx[0],
+            ctx[1],
+            ctx[2],
+            ctx[3],
         )
         return
     host = SETTINGS.hostname_label
     sod = start_of_day_ts()
     now = now_ts()
+    ctx = _log_context(host, sod, now)
     start = time.perf_counter()
     success = 0.0
 
     logger.debug(
         "Scrape start (host=%s, sod=%s, now=%s, tz=%s)",
-        host,
-        sod,
-        now,
-        SETTINGS.exporter_tz,
+        ctx[0],
+        ctx[2],
+        ctx[3],
+        ctx[1],
     )
 
     try:
@@ -292,10 +298,10 @@ def scrape_and_update():
     except Exception:
         logger.exception(
             "Scrape failed (host=%s, tz=%s, sod=%s, now=%s)",
-            host,
-            SETTINGS.exporter_tz,
-            sod,
-            now,
+            ctx[0],
+            ctx[1],
+            ctx[2],
+            ctx[3],
         )
         raise
     finally:
@@ -305,10 +311,10 @@ def scrape_and_update():
         metrics.METRICS.pihole_scrape_success.labels(host).set(success)
         logger.info(
             "Scrape completed (host=%s, tz=%s, sod=%s, now=%s) duration=%.3fs success=%s",
-            host,
-            SETTINGS.exporter_tz,
-            sod,
-            now,
+            ctx[0],
+            ctx[1],
+            ctx[2],
+            ctx[3],
             duration,
             int(success),
         )
