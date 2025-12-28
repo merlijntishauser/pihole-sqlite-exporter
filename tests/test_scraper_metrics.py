@@ -22,6 +22,14 @@ def test_scrape_metrics(metric: str, expected, metrics_text: str, metric_value) 
     assert metric_value(metrics_text, metric, {"hostname": "test-host"}) == expected
 
 
+def test_scrape_duration_metrics(metrics_text: str, metric_value) -> None:
+    duration = metric_value(
+        metrics_text, "pihole_scrape_duration_seconds", {"hostname": "test-host"}
+    )
+    assert duration >= 0.0
+    assert metric_value(metrics_text, "pihole_scrape_success", {"hostname": "test-host"}) == 1.0
+
+
 def test_scrape_falls_back_when_gravity_missing(
     ftl_db_factory, tmp_path, monkeypatch: pytest.MonkeyPatch, metric_value
 ) -> None:

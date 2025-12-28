@@ -310,27 +310,35 @@ def scrape_and_update():
     host = HOSTNAME_LABEL
     sod = start_of_day_ts()
     now = now_ts()
+    start = time.perf_counter()
+    success = 0.0
 
     logger.debug("Scrape start (host=%s, sod=%s, now=%s, tz=%s)", host, sod, now, EXPORTER_TZ)
 
-    metrics.METRICS.clear_dynamic_series()
-    blocked_list = _blocked_status_list()
+    try:
+        metrics.METRICS.clear_dynamic_series()
+        blocked_list = _blocked_status_list()
 
-    with sqlite_ro(FTL_DB_PATH) as conn:
-        cur = conn.cursor()
-        _load_counters(cur, host)
-        _load_lifetime_destinations(cur, blocked_list)
-        _load_clients_ever_seen(cur, host)
-        _load_queries_today(cur, host, sod, blocked_list)
-        _load_unique_counts(cur, host, now)
-        _load_query_types(cur, host, sod)
-        _load_reply_types(cur, host, sod)
-        _load_forwarded_cached(cur, host, sod)
-        _load_forward_destinations(cur, host, sod)
-        _load_synthetic_destinations(cur, host, sod, blocked_list)
-        _load_top_lists(cur, host, sod, blocked_list, TOP_N)
+        with sqlite_ro(FTL_DB_PATH) as conn:
+            cur = conn.cursor()
+            _load_counters(cur, host)
+            _load_lifetime_destinations(cur, blocked_list)
+            _load_clients_ever_seen(cur, host)
+            _load_queries_today(cur, host, sod, blocked_list)
+            _load_unique_counts(cur, host, now)
+            _load_query_types(cur, host, sod)
+            _load_reply_types(cur, host, sod)
+            _load_forwarded_cached(cur, host, sod)
+            _load_forward_destinations(cur, host, sod)
+            _load_synthetic_destinations(cur, host, sod, blocked_list)
+            _load_top_lists(cur, host, sod, blocked_list, TOP_N)
 
-    _load_domains_blocked(host)
+        _load_domains_blocked(host)
+        success = 1.0
+    finally:
+        duration = time.perf_counter() - start
+        metrics.METRICS.pihole_scrape_duration_seconds.labels(host).set(duration)
+        metrics.METRICS.pihole_scrape_success.labels(host).set(success)
 
 
 def update_request_rate_for_request(now: float | None = None) -> None:

@@ -164,6 +164,20 @@ class Metrics:
             registry=self.registry,
         )
 
+        self.pihole_scrape_duration_seconds = Gauge(
+            "pihole_scrape_duration_seconds",
+            "Time spent in scrape_and_update in seconds",
+            ["hostname"],
+            registry=self.registry,
+        )
+
+        self.pihole_scrape_success = Gauge(
+            "pihole_scrape_success",
+            "Whether the last scrape succeeded (1 for success, 0 for failure)",
+            ["hostname"],
+            registry=self.registry,
+        )
+
         self.pihole_status = Gauge(
             "pihole_status",
             "Whether Pi-hole is enabled",
