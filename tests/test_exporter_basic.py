@@ -89,9 +89,14 @@ def test_scrape_falls_back_when_gravity_missing(
 
 
 def test_request_rate_after_second_scrape(
-    ftl_db_factory, monkeypatch: pytest.MonkeyPatch, update_counters, metric_value
+    ftl_db_factory, monkeypatch: pytest.MonkeyPatch, add_queries, metric_value
 ) -> None:
-    ftl_path = ftl_db_factory(counters=(5, 1))
+    base_time = int(time.time())
+    initial_queries = [
+        (base_time - 120, 2, 1, 3, "1.1.1.1", 0.1, "example.com", "10.0.0.1"),
+        (base_time - 90, 3, 2, 2, None, None, "cached.com", "10.0.0.2"),
+    ]
+    ftl_path = ftl_db_factory(counters=(5, 1), queries=initial_queries)
     monkeypatch.setattr(exp, "FTL_DB_PATH", str(ftl_path))
     monkeypatch.setattr(exp, "GRAVITY_DB_PATH", str(ftl_path))
     monkeypatch.setattr(exp, "HOSTNAME_LABEL", "test-host")
@@ -100,17 +105,20 @@ def test_request_rate_after_second_scrape(
     monkeypatch.setattr(exp, "_last_request_ts", None)
     monkeypatch.setattr(exp, "_last_request_total", None)
 
-    base_time = time.time()
     exp.scrape_and_update()
     exp.update_request_rate_for_request(now=base_time)
 
-    update_counters(ftl_path, total=7, blocked=2)
-    exp.scrape_and_update()
+    new_queries = [
+        (base_time + 1, 2, 1, 3, "1.1.1.1", 0.1, "example.com", "10.0.0.1"),
+        (base_time + 2, 3, 2, 2, None, None, "cached.com", "10.0.0.2"),
+        (base_time + 5, 1, 1, 2, None, None, "ads.com", "10.0.0.1"),
+    ]
+    add_queries(ftl_path, new_queries)
     exp.update_request_rate_for_request(now=base_time + 10)
 
     metrics = exp.generate_latest(exp.REGISTRY).decode("utf-8")
     assert metric_value(metrics, "pihole_request_rate", {"hostname": "test-host"}) == pytest.approx(
-        0.2
+        0.3
     )
 
 

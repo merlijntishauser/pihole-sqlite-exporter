@@ -119,6 +119,28 @@ def update_counters():
 
 
 @pytest.fixture
+def add_queries():
+    def _add(
+        path: Path,
+        queries: list[tuple[int, int, int, int | None, str | None, float | None, str, str]],
+    ) -> None:
+        conn = sqlite3.connect(path)
+        cur = conn.cursor()
+        cur.executemany(
+            """
+            INSERT INTO queries (
+                timestamp, status, type, reply_type, forward, reply_time, domain, client
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+            """,
+            queries,
+        )
+        conn.commit()
+        conn.close()
+
+    return _add
+
+
+@pytest.fixture
 def gravity_db(tmp_path: Path) -> Path:
     path = tmp_path / "gravity.db"
     _create_gravity_db(path)

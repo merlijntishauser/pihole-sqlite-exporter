@@ -685,15 +685,21 @@ def update_request_rate_for_request(now: float | None = None) -> None:
     if now is None:
         now = time.time()
 
-    try:
-        refresh_counters_only()
-    except Exception:
-        logger.exception("Failed to refresh counters for request rate")
-
     host = HOSTNAME_LABEL
     if _last_request_ts is not None and _last_request_total is not None:
         dt = max(1.0, now - _last_request_ts)
-        dq = max(0, _total_queries_lifetime - _last_request_total)
+        since_ts = int(_last_request_ts)
+        try:
+            with sqlite_ro(FTL_DB_PATH) as conn:
+                cur = conn.cursor()
+                cur.execute(
+                    "SELECT COUNT(*) FROM queries WHERE timestamp >= ?;",
+                    (since_ts,),
+                )
+                dq = int(cur.fetchone()[0])
+        except Exception:
+            logger.exception("Failed to compute request rate from queries table")
+            dq = 0
         rate = dq / dt
         pihole_request_rate.labels(host).set(rate)
         logger.debug("Request rate queries_delta=%d time_delta=%.3f rate=%.6f", dq, dt, rate)
