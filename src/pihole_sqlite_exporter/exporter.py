@@ -123,6 +123,31 @@ _forward_destinations_lifetime = {}  # type: dict[str, int]
 _last_request_ts = None
 _last_request_total = None
 _last_request_rowid = None
+_request_rate_cursor_col = None
+
+
+def _detect_request_rate_cursor(cur: sqlite3.Cursor) -> str | None:
+    global _request_rate_cursor_col
+
+    if _request_rate_cursor_col is not None:
+        return _request_rate_cursor_col or None
+
+    try:
+        cur.execute("SELECT MAX(rowid) FROM queries;")
+        cur.fetchone()
+        _request_rate_cursor_col = "rowid"
+        return "rowid"
+    except sqlite3.OperationalError:
+        pass
+
+    cur.execute("PRAGMA table_info(queries);")
+    cols = {row[1] for row in cur.fetchall()}
+    if "id" in cols:
+        _request_rate_cursor_col = "id"
+        return "id"
+
+    _request_rate_cursor_col = ""
+    return None
 
 
 class PiholeTotalsCollector:
@@ -689,6 +714,7 @@ def update_request_rate_for_request(now: float | None = None) -> None:
 
     host = HOSTNAME_LABEL
     rowid = _last_request_rowid
+    cursor_col = None
     try:
         with sqlite_ro(FTL_DB_PATH) as conn:
             cur = conn.cursor()
@@ -696,20 +722,27 @@ def update_request_rate_for_request(now: float | None = None) -> None:
             _total_queries_lifetime = int(cur.fetchone()[0])
             cur.execute("SELECT value FROM counters WHERE id = 1;")
             _blocked_queries_lifetime = int(cur.fetchone()[0])
-            cur.execute("SELECT MAX(rowid) FROM queries;")
-            rowid = cur.fetchone()[0]
+            cursor_col = _detect_request_rate_cursor(cur)
+            if cursor_col:
+                cur.execute(f"SELECT MAX({cursor_col}) FROM queries;")
+                rowid = cur.fetchone()[0]
     except Exception:
         logger.exception("Failed to refresh counters for request rate")
 
     if _last_request_ts is not None:
         dt = max(1.0, now - _last_request_ts)
         dq = 0
-        if _last_request_rowid is not None and rowid is not None and rowid > _last_request_rowid:
+        if (
+            cursor_col
+            and _last_request_rowid is not None
+            and rowid is not None
+            and rowid > _last_request_rowid
+        ):
             try:
                 with sqlite_ro(FTL_DB_PATH) as conn:
                     cur = conn.cursor()
                     cur.execute(
-                        "SELECT COUNT(*) FROM queries WHERE rowid > ?;",
+                        f"SELECT COUNT(*) FROM queries WHERE {cursor_col} > ?;",
                         (_last_request_rowid,),
                     )
                     dq = int(cur.fetchone()[0])

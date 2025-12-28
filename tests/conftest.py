@@ -158,6 +158,7 @@ def exporter_config(monkeypatch: pytest.MonkeyPatch, ftl_db: Path, gravity_db: P
     monkeypatch.setattr(exp, "_last_request_ts", None)
     monkeypatch.setattr(exp, "_last_request_total", None)
     monkeypatch.setattr(exp, "_last_request_rowid", None)
+    monkeypatch.setattr(exp, "_request_rate_cursor_col", None)
 
 
 @pytest.fixture
