@@ -17,7 +17,7 @@ def make_handler(update_request_rate, registry, logger=None):
                 return
 
             try:
-                logger.info("HTTP request: %s %s", self.command, self.path)
+                logger.debug("HTTP request: %s %s", self.command, self.path)
                 start = time.time()
                 update_request_rate(start)
                 payload = generate_latest(registry)
@@ -27,7 +27,7 @@ def make_handler(update_request_rate, registry, logger=None):
                 self.end_headers()
                 self.wfile.write(payload)
                 elapsed = time.time() - start
-                logger.info(
+                logger.debug(
                     "HTTP 200 served metrics bytes=%d scrape_time=%.3fs",
                     len(payload),
                     elapsed,

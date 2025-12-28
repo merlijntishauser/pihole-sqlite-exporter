@@ -45,6 +45,6 @@ def test_scrape_skipped_when_lock_held(
     try:
         with caplog.at_level("INFO"):
             scraper.scrape_and_update()
-        assert "Scrape skipped; another scrape is still in progress" in caplog.text
+        assert "Scrape skipped" in caplog.text
     finally:
         scraper._SCRAPE_LOCK.release()

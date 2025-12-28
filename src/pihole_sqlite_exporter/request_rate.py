@@ -73,7 +73,9 @@ class RequestRateTracker:
                     latest_cursor = cur.fetchone()[0]
                 elif not self._logged_no_cursor:
                     logger.warning(
-                        "Request rate cursor unavailable (no rowid/id); falling back to counters"
+                        "Request rate cursor unavailable (no rowid/id); falling back to counters "
+                        "(host=%s)",
+                        host,
                     )
                     self._logged_no_cursor = True
         except Exception:

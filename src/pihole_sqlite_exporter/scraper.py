@@ -300,6 +300,7 @@ def _load_domains_blocked(host: str) -> None:
                 cur = conn.cursor()
                 cur.execute(SQL_DOMAIN_BY_ID_COUNT)
                 domains_value = int(cur.fetchone()[0])
+                logger.info("Gravity DB fallback: using FTL domain count")
         except Exception as e:
             logger.warning("Fallback domain count failed: %s", e)
             domains_value = 0
@@ -309,7 +310,13 @@ def _load_domains_blocked(host: str) -> None:
 
 def scrape_and_update():
     if not _SCRAPE_LOCK.acquire(blocking=False):
-        logger.info("Scrape skipped; another scrape is still in progress")
+        logger.info(
+            "Scrape skipped (host=%s, tz=%s, sod=%s, now=%s); another scrape is still in progress",
+            HOSTNAME_LABEL,
+            EXPORTER_TZ,
+            start_of_day_ts(),
+            now_ts(),
+        )
         return
     host = HOSTNAME_LABEL
     sod = start_of_day_ts()
@@ -339,11 +346,25 @@ def scrape_and_update():
 
         _load_domains_blocked(host)
         success = 1.0
+    except Exception:
+        logger.exception(
+            "Scrape failed (host=%s, tz=%s, sod=%s, now=%s)", host, EXPORTER_TZ, sod, now
+        )
+        raise
     finally:
         _SCRAPE_LOCK.release()
         duration = time.perf_counter() - start
         metrics.METRICS.pihole_scrape_duration_seconds.labels(host).set(duration)
         metrics.METRICS.pihole_scrape_success.labels(host).set(success)
+        logger.info(
+            "Scrape completed (host=%s, tz=%s, sod=%s, now=%s) duration=%.3fs success=%s",
+            host,
+            EXPORTER_TZ,
+            sod,
+            now,
+            duration,
+            int(success),
+        )
 
 
 def update_request_rate_for_request(now: float | None = None) -> None:
