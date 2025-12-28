@@ -11,4 +11,3 @@
 - Improve request‑rate robustness: Add a one‑time log (or metric) when falling back from row cursor to counters, so operators know which mode is active.
 - Isolate SQL: Most SQL lives inline in scraper.py. Extract into a queries.py module with named constants for readability and easier tests.
 - Add scrape duration metric: A simple gauge for last_scrape_seconds and last_scrape_success will help diagnose slow scrapes without relying on logs.
-- Clarify config: config.py is unused; either remove it or re‑adopt it to avoid confusion.
