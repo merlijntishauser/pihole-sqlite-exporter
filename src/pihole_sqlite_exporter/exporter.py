@@ -668,6 +668,7 @@ class Handler(BaseHTTPRequestHandler):
 
         try:
             logger.info("HTTP request: %s %s", self.command, self.path)
+            start = time.time()
             scrape_and_update()
             payload = generate_latest(REGISTRY)
             self.send_response(200)
@@ -675,7 +676,10 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Content-Length", str(len(payload)))
             self.end_headers()
             self.wfile.write(payload)
-            logger.info("HTTP 200 served metrics bytes=%d", len(payload))
+            elapsed = time.time() - start
+            logger.info("HTTP 200 served metrics bytes=%d scrape_time=%.3fs", len(payload), elapsed)
+        except (BrokenPipeError, ConnectionResetError) as e:
+            logger.debug("Client disconnected while serving request: %s", e)
         except Exception as e:
             logger.exception("Scrape failed while serving request")
             msg = f"scrape failed: {e}\n".encode()
