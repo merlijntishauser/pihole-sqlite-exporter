@@ -3,12 +3,13 @@ import os
 from prometheus_client import CollectorRegistry, Gauge
 from prometheus_client.core import CounterMetricFamily
 
+from .metrics_state import MetricsState
+
 HOSTNAME_LABEL = os.getenv("HOSTNAME_LABEL", "host.docker.internal")
 
 REGISTRY = CollectorRegistry()
 
-_total_queries_lifetime = 0
-_blocked_queries_lifetime = 0
+STATE = MetricsState()
 _forward_destinations_lifetime: dict[str, int] = {}
 
 
@@ -18,9 +19,8 @@ def set_hostname_label(label: str) -> None:
 
 
 def set_lifetime_totals(total: int, blocked: int) -> None:
-    global _total_queries_lifetime, _blocked_queries_lifetime
-    _total_queries_lifetime = total
-    _blocked_queries_lifetime = blocked
+    STATE.total_queries_lifetime = total
+    STATE.blocked_queries_lifetime = blocked
 
 
 def set_forward_destinations_lifetime(lifetime: dict[str, int]) -> None:
@@ -32,7 +32,7 @@ class PiholeTotalsCollector:
     def collect(self):
         host = HOSTNAME_LABEL
 
-        m1 = CounterMetricFamily(
+        total_queries_metric = CounterMetricFamily(
             "pihole_dns_queries_total",
             (
                 "Total number of DNS queries (lifetime, monotonic) as reported by Pi-hole FTL "
@@ -40,10 +40,10 @@ class PiholeTotalsCollector:
             ),
             labels=["hostname"],
         )
-        m1.add_metric([host], float(_total_queries_lifetime))
-        yield m1
+        total_queries_metric.add_metric([host], float(STATE.total_queries_lifetime))
+        yield total_queries_metric
 
-        m2 = CounterMetricFamily(
+        blocked_queries_metric = CounterMetricFamily(
             "pihole_ads_blocked_total",
             (
                 "Total number of blocked queries (lifetime, monotonic) as reported by Pi-hole FTL "
@@ -51,14 +51,14 @@ class PiholeTotalsCollector:
             ),
             labels=["hostname"],
         )
-        m2.add_metric([host], float(_blocked_queries_lifetime))
-        yield m2
+        blocked_queries_metric.add_metric([host], float(STATE.blocked_queries_lifetime))
+        yield blocked_queries_metric
 
 
 class PiholeDestTotalsCollector:
     def collect(self):
         host = HOSTNAME_LABEL
-        m = CounterMetricFamily(
+        forward_destinations_metric = CounterMetricFamily(
             "pihole_forward_destinations_total",
             (
                 "Total number of forward destinations requests made by Pi-hole by destination "
@@ -69,9 +69,9 @@ class PiholeDestTotalsCollector:
 
         for dest in sorted(_forward_destinations_lifetime.keys()):
             cnt = _forward_destinations_lifetime.get(dest, 0)
-            m.add_metric([host, dest, dest], float(cnt))
+            forward_destinations_metric.add_metric([host, dest, dest], float(cnt))
 
-        yield m
+        yield forward_destinations_metric
 
 
 REGISTRY.register(PiholeTotalsCollector())

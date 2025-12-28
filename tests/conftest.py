@@ -156,7 +156,7 @@ def exporter_config(monkeypatch: pytest.MonkeyPatch, ftl_db: Path, gravity_db: P
     monkeypatch.setattr(scraper, "TOP_N", 10)
     monkeypatch.setattr(scraper, "ENABLE_LIFETIME_DEST_COUNTERS", False)
     metrics.set_hostname_label("test-host")
-    scraper._request_rate.reset()
+    metrics.STATE.request_rate.reset()
 
 
 @pytest.fixture

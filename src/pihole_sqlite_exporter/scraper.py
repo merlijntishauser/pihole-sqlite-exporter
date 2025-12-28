@@ -7,14 +7,13 @@ from zoneinfo import ZoneInfo
 
 from . import metrics
 from .db import sqlite_ro
-from .request_rate import RequestRateTracker
 
 logger = logging.getLogger("pihole_sqlite_exporter")
 
 
 def env_truthy(name: str, default: str = "false") -> bool:
-    v = os.getenv(name, default)
-    return str(v).strip().lower() in {"1", "true", "t", "yes", "y", "on"}
+    value = os.getenv(name, default)
+    return str(value).strip().lower() in {"1", "true", "t", "yes", "y", "on"}
 
 
 FTL_DB_PATH = os.getenv("FTL_DB_PATH", "/etc/pihole/pihole-FTL.db")
@@ -32,7 +31,6 @@ ENABLE_LIFETIME_DEST_COUNTERS = env_truthy("ENABLE_LIFETIME_DEST_COUNTERS", "tru
 
 metrics.set_hostname_label(HOSTNAME_LABEL)
 
-_request_rate = RequestRateTracker()
 
 BLOCKED_STATUSES = {1, 4, 5, 6, 7, 8, 9, 10, 11, 15}
 
@@ -95,11 +93,11 @@ def now_ts() -> int:
 
 
 def variance(values):
-    n = len(values)
-    if n == 0:
+    count = len(values)
+    if count == 0:
         return 0.0
-    mean = sum(values) / n
-    return sum((x - mean) ** 2 for x in values) / n
+    mean = sum(values) / count
+    return sum((x - mean) ** 2 for x in values) / count
 
 
 def scrape_and_update():
@@ -368,7 +366,7 @@ def scrape_and_update():
 
 
 def update_request_rate_for_request(now: float | None = None) -> None:
-    total, blocked = _request_rate.update(
+    total, blocked = metrics.STATE.request_rate.update(
         now=now,
         db_path=FTL_DB_PATH,
         host=HOSTNAME_LABEL,

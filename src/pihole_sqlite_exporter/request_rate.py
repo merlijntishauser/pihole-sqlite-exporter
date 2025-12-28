@@ -53,7 +53,7 @@ class RequestRateTracker:
 
         total = None
         blocked = None
-        rowid = self.last_request_rowid
+        latest_cursor = self.last_request_rowid
         cursor_col = None
 
         try:
@@ -66,18 +66,18 @@ class RequestRateTracker:
                 cursor_col = self._detect_cursor(cur)
                 if cursor_col:
                     cur.execute(f"SELECT MAX({cursor_col}) FROM queries;")
-                    rowid = cur.fetchone()[0]
+                    latest_cursor = cur.fetchone()[0]
         except Exception:
             logger.exception("Failed to refresh counters for request rate")
 
         if self.last_request_ts is not None:
-            dt = max(1.0, now - self.last_request_ts)
-            dq = 0
+            elapsed_seconds = max(1.0, now - self.last_request_ts)
+            queries_delta = 0
             if (
                 cursor_col
                 and self.last_request_rowid is not None
-                and rowid is not None
-                and rowid > self.last_request_rowid
+                and latest_cursor is not None
+                and latest_cursor > self.last_request_rowid
             ):
                 try:
                     with sqlite_ro(db_path) as conn:
@@ -86,16 +86,21 @@ class RequestRateTracker:
                             f"SELECT COUNT(*) FROM queries WHERE {cursor_col} > ?;",
                             (self.last_request_rowid,),
                         )
-                        dq = int(cur.fetchone()[0])
+                        queries_delta = int(cur.fetchone()[0])
                 except Exception:
                     logger.exception("Failed to compute request rate from queries table")
-                    dq = 0
+                    queries_delta = 0
             elif self.last_request_total is not None and total is not None:
-                dq = max(0, total - self.last_request_total)
+                queries_delta = max(0, total - self.last_request_total)
 
-            rate = dq / dt
+            rate = queries_delta / elapsed_seconds
             rate_gauge.labels(host).set(rate)
-            logger.debug("Request rate queries_delta=%d time_delta=%.3f rate=%.6f", dq, dt, rate)
+            logger.debug(
+                "Request rate queries_delta=%d time_delta=%.3f rate=%.6f",
+                queries_delta,
+                elapsed_seconds,
+                rate,
+            )
         else:
             rate_gauge.labels(host).set(0.0)
             logger.debug("Request rate initialized to 0.0")
@@ -103,7 +108,7 @@ class RequestRateTracker:
         self.last_request_ts = now
         if total is not None:
             self.last_request_total = total
-        if rowid is not None:
-            self.last_request_rowid = rowid
+        if latest_cursor is not None:
+            self.last_request_rowid = latest_cursor
 
         return total, blocked
