@@ -56,7 +56,7 @@ def parse_args():
 scrape_and_update = scraper.scrape_and_update
 update_request_rate_for_request = scraper.update_request_rate_for_request
 
-REGISTRY = metrics.REGISTRY
+REGISTRY = metrics.METRICS.registry
 Handler = http_server.make_handler(update_request_rate_for_request, REGISTRY, logger)
 generate_latest = _generate_latest
 

@@ -6,7 +6,7 @@ from pihole_sqlite_exporter import http_server, metrics, scraper
 
 HandlerCls = http_server.make_handler(
     scraper.update_request_rate_for_request,
-    metrics.REGISTRY,
+    metrics.METRICS.registry,
 )
 
 

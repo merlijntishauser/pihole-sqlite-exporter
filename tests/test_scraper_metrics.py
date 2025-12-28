@@ -32,11 +32,11 @@ def test_scrape_falls_back_when_gravity_missing(
     monkeypatch.setattr(scraper, "HOSTNAME_LABEL", "test-host")
     monkeypatch.setattr(scraper, "EXPORTER_TZ", "UTC")
     monkeypatch.setattr(scraper, "ENABLE_LIFETIME_DEST_COUNTERS", False)
-    metrics.set_hostname_label("test-host")
-    metrics.STATE.request_rate.reset()
+    metrics.METRICS.set_hostname_label("test-host")
+    metrics.METRICS.state.request_rate.reset()
 
     scraper.scrape_and_update()
-    metrics_text = generate_latest(metrics.REGISTRY).decode("utf-8")
+    metrics_text = generate_latest(metrics.METRICS.registry).decode("utf-8")
     assert (
         metric_value(metrics_text, "pihole_domains_being_blocked", {"hostname": "test-host"}) == 2.0
     )
@@ -56,8 +56,8 @@ def test_request_rate_after_second_scrape(
     monkeypatch.setattr(scraper, "HOSTNAME_LABEL", "test-host")
     monkeypatch.setattr(scraper, "EXPORTER_TZ", "UTC")
     monkeypatch.setattr(scraper, "ENABLE_LIFETIME_DEST_COUNTERS", False)
-    metrics.set_hostname_label("test-host")
-    metrics.STATE.request_rate.reset()
+    metrics.METRICS.set_hostname_label("test-host")
+    metrics.METRICS.state.request_rate.reset()
 
     scraper.scrape_and_update()
     scraper.update_request_rate_for_request(now=base_time)
@@ -70,7 +70,7 @@ def test_request_rate_after_second_scrape(
     add_queries(ftl_path, new_queries)
     scraper.update_request_rate_for_request(now=base_time + 10)
 
-    metrics_text = generate_latest(metrics.REGISTRY).decode("utf-8")
+    metrics_text = generate_latest(metrics.METRICS.registry).decode("utf-8")
     assert metric_value(
         metrics_text, "pihole_request_rate", {"hostname": "test-host"}
     ) == pytest.approx(0.3)
@@ -92,11 +92,11 @@ def test_lifetime_destinations_metric(
     monkeypatch.setattr(scraper, "HOSTNAME_LABEL", "test-host")
     monkeypatch.setattr(scraper, "EXPORTER_TZ", "UTC")
     monkeypatch.setattr(scraper, "ENABLE_LIFETIME_DEST_COUNTERS", True)
-    metrics.set_hostname_label("test-host")
-    metrics.STATE.request_rate.reset()
+    metrics.METRICS.set_hostname_label("test-host")
+    metrics.METRICS.state.request_rate.reset()
 
     scraper.scrape_and_update()
-    metrics_text = generate_latest(metrics.REGISTRY).decode("utf-8")
+    metrics_text = generate_latest(metrics.METRICS.registry).decode("utf-8")
     assert (
         metric_value(
             metrics_text,

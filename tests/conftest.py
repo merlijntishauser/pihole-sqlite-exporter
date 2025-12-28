@@ -76,15 +76,15 @@ def exporter_config(monkeypatch: pytest.MonkeyPatch, ftl_db: Path, gravity_db: P
     monkeypatch.setattr(scraper, "EXPORTER_TZ", "UTC")
     monkeypatch.setattr(scraper, "TOP_N", 10)
     monkeypatch.setattr(scraper, "ENABLE_LIFETIME_DEST_COUNTERS", False)
-    metrics.set_hostname_label("test-host")
-    metrics.STATE.request_rate.reset()
+    metrics.METRICS.set_hostname_label("test-host")
+    metrics.METRICS.state.request_rate.reset()
 
 
 @pytest.fixture
 def metrics_text(exporter_config: None) -> str:
     scraper.scrape_and_update()
     scraper.update_request_rate_for_request()
-    return generate_latest(metrics.REGISTRY).decode("utf-8")
+    return generate_latest(metrics.METRICS.registry).decode("utf-8")
 
 
 @pytest.fixture

@@ -16,7 +16,6 @@ Thanks for contributing! This project values XP practices: clear naming, readabl
 - `src/pihole_sqlite_exporter/metrics.py`: Registry, gauges, and collectors.
 - `src/pihole_sqlite_exporter/db.py`: SQLite helpers.
 - `src/pihole_sqlite_exporter/request_rate.py`: Request-rate tracker and cursor detection.
-- `src/pihole_sqlite_exporter/config.py`: Legacy config helper (not used by the current exporter).
 - `tests/`: Unit tests for scrape logic and request rate behavior.
 
 ## Tests and linting

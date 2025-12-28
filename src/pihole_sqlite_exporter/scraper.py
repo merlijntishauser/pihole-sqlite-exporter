@@ -53,7 +53,7 @@ SCRAPE_INTERVAL = int(os.getenv("SCRAPE_INTERVAL", "15"))
 EXPORTER_TZ = os.getenv("EXPORTER_TZ", "Europe/Amsterdam")
 ENABLE_LIFETIME_DEST_COUNTERS = env_truthy("ENABLE_LIFETIME_DEST_COUNTERS", "true")
 
-metrics.set_hostname_label(HOSTNAME_LABEL)
+metrics.METRICS.set_hostname_label(HOSTNAME_LABEL)
 
 
 BLOCKED_STATUSES = {1, 4, 5, 6, 7, 8, 9, 10, 11, 15}
@@ -129,7 +129,7 @@ def _blocked_status_list() -> str:
 
 
 def _load_counters(cur: sqlite3.Cursor, host: str) -> tuple[int, int]:
-    metrics.pihole_status.labels(host).set(1)
+    metrics.METRICS.pihole_status.labels(host).set(1)
 
     cur.execute(SQL_COUNTER_TOTAL)
     total_queries_lifetime = int(cur.fetchone()[0])
@@ -137,7 +137,7 @@ def _load_counters(cur: sqlite3.Cursor, host: str) -> tuple[int, int]:
     cur.execute(SQL_COUNTER_BLOCKED)
     blocked_queries_lifetime = int(cur.fetchone()[0])
 
-    metrics.set_lifetime_totals(total_queries_lifetime, blocked_queries_lifetime)
+    metrics.METRICS.set_lifetime_totals(total_queries_lifetime, blocked_queries_lifetime)
     logger.debug(
         "FTL counters: total=%d blocked=%d",
         total_queries_lifetime,
@@ -148,7 +148,7 @@ def _load_counters(cur: sqlite3.Cursor, host: str) -> tuple[int, int]:
 
 def _load_lifetime_destinations(cur: sqlite3.Cursor, blocked_list: str) -> None:
     if not ENABLE_LIFETIME_DEST_COUNTERS:
-        metrics.set_forward_destinations_lifetime({})
+        metrics.METRICS.set_forward_destinations_lifetime({})
         return
 
     lifetime = {}
@@ -162,13 +162,13 @@ def _load_lifetime_destinations(cur: sqlite3.Cursor, blocked_list: str) -> None:
     cur.execute(SQL_LIFETIME_BLOCKED.format(blocked_list=blocked_list))
     lifetime["blocklist"] = int(cur.fetchone()[0])
 
-    metrics.set_forward_destinations_lifetime(lifetime)
+    metrics.METRICS.set_forward_destinations_lifetime(lifetime)
     logger.debug("Lifetime destinations computed: %d labelsets", len(lifetime))
 
 
 def _load_clients_ever_seen(cur: sqlite3.Cursor, host: str) -> None:
     cur.execute(SQL_CLIENTS_EVER_SEEN)
-    metrics.pihole_clients_ever_seen.labels(host).set(float(cur.fetchone()[0]))
+    metrics.METRICS.pihole_clients_ever_seen.labels(host).set(float(cur.fetchone()[0]))
 
 
 def _load_queries_today(cur: sqlite3.Cursor, host: str, sod: int, blocked_list: str) -> None:
@@ -178,20 +178,20 @@ def _load_queries_today(cur: sqlite3.Cursor, host: str, sod: int, blocked_list: 
     cur.execute(SQL_BLOCKED_TODAY.format(blocked_list=blocked_list), (sod,))
     b_today = int(cur.fetchone()[0])
 
-    metrics.pihole_dns_queries_today.labels(host).set(float(q_today))
-    metrics.pihole_dns_queries_all_types.labels(host).set(float(q_today))
-    metrics.pihole_ads_blocked_today.labels(host).set(float(b_today))
-    metrics.pihole_ads_percentage_today.labels(host).set(
+    metrics.METRICS.pihole_dns_queries_today.labels(host).set(float(q_today))
+    metrics.METRICS.pihole_dns_queries_all_types.labels(host).set(float(q_today))
+    metrics.METRICS.pihole_ads_blocked_today.labels(host).set(float(b_today))
+    metrics.METRICS.pihole_ads_percentage_today.labels(host).set(
         (b_today / q_today * 100.0) if q_today > 0 else 0.0
     )
 
 
 def _load_unique_counts(cur: sqlite3.Cursor, host: str, now: int) -> None:
     cur.execute(SQL_UNIQUE_CLIENTS, (now - 86400,))
-    metrics.pihole_unique_clients.labels(host).set(float(cur.fetchone()[0]))
+    metrics.METRICS.pihole_unique_clients.labels(host).set(float(cur.fetchone()[0]))
 
     cur.execute(SQL_UNIQUE_DOMAINS, (now - 86400,))
-    metrics.pihole_unique_domains.labels(host).set(float(cur.fetchone()[0]))
+    metrics.METRICS.pihole_unique_domains.labels(host).set(float(cur.fetchone()[0]))
 
 
 def _load_query_types(cur: sqlite3.Cursor, host: str, sod: int) -> None:
@@ -200,7 +200,7 @@ def _load_query_types(cur: sqlite3.Cursor, host: str, sod: int) -> None:
     for t, c in cur.fetchall():
         counts_by_type[int(t)] = int(c)
     for tid, name in QUERY_TYPE_MAP.items():
-        metrics.pihole_querytypes.labels(host, name).set(float(counts_by_type.get(tid, 0)))
+        metrics.METRICS.pihole_querytypes.labels(host, name).set(float(counts_by_type.get(tid, 0)))
 
 
 def _load_reply_types(cur: sqlite3.Cursor, host: str, sod: int) -> None:
@@ -211,7 +211,7 @@ def _load_reply_types(cur: sqlite3.Cursor, host: str, sod: int) -> None:
             continue
         counts_by_reply[int(rt)] = int(c)
     for rid, label in REPLY_TYPE_MAP.items():
-        metrics.pihole_reply.labels(host, label).set(float(counts_by_reply.get(rid, 0)))
+        metrics.METRICS.pihole_reply.labels(host, label).set(float(counts_by_reply.get(rid, 0)))
 
 
 def _load_forwarded_cached(cur: sqlite3.Cursor, host: str, sod: int) -> None:
@@ -221,8 +221,8 @@ def _load_forwarded_cached(cur: sqlite3.Cursor, host: str, sod: int) -> None:
     cur.execute(SQL_CACHED_TODAY, (sod,))
     cached = int(cur.fetchone()[0])
 
-    metrics.pihole_queries_forwarded.labels(host).set(float(forwarded))
-    metrics.pihole_queries_cached.labels(host).set(float(cached))
+    metrics.METRICS.pihole_queries_forwarded.labels(host).set(float(forwarded))
+    metrics.METRICS.pihole_queries_cached.labels(host).set(float(cached))
 
 
 def _load_forward_destinations(cur: sqlite3.Cursor, host: str, sod: int) -> None:
@@ -230,14 +230,14 @@ def _load_forward_destinations(cur: sqlite3.Cursor, host: str, sod: int) -> None
     forwards = cur.fetchall()
     for fwd, cnt, avg_rt in forwards:
         dest = str(fwd)
-        metrics.pihole_forward_destinations.labels(host, dest, dest).set(float(cnt))
-        metrics.pihole_forward_destinations_responsetime.labels(host, dest, dest).set(
+        metrics.METRICS.pihole_forward_destinations.labels(host, dest, dest).set(float(cnt))
+        metrics.METRICS.pihole_forward_destinations_responsetime.labels(host, dest, dest).set(
             float(avg_rt or 0.0)
         )
 
         cur.execute(SQL_FORWARD_REPLY_TIMES, (sod, fwd))
         vals = [float(r[0]) for r in cur.fetchall()]
-        metrics.pihole_forward_destinations_responsevariance.labels(host, dest, dest).set(
+        metrics.METRICS.pihole_forward_destinations_responsevariance.labels(host, dest, dest).set(
             float(variance(vals))
         )
 
@@ -247,17 +247,23 @@ def _load_synthetic_destinations(
 ) -> None:
     cur.execute(SQL_CACHED_TODAY, (sod,))
     cache_cnt = int(cur.fetchone()[0])
-    metrics.pihole_forward_destinations.labels(host, "cache", "cache").set(float(cache_cnt))
-    metrics.pihole_forward_destinations_responsetime.labels(host, "cache", "cache").set(0.0)
-    metrics.pihole_forward_destinations_responsevariance.labels(host, "cache", "cache").set(0.0)
+    metrics.METRICS.pihole_forward_destinations.labels(host, "cache", "cache").set(float(cache_cnt))
+    metrics.METRICS.pihole_forward_destinations_responsetime.labels(host, "cache", "cache").set(0.0)
+    metrics.METRICS.pihole_forward_destinations_responsevariance.labels(host, "cache", "cache").set(
+        0.0
+    )
 
     cur.execute(SQL_BLOCKED_TODAY.format(blocked_list=blocked_list), (sod,))
     bl_cnt = int(cur.fetchone()[0])
-    metrics.pihole_forward_destinations.labels(host, "blocklist", "blocklist").set(float(bl_cnt))
-    metrics.pihole_forward_destinations_responsetime.labels(host, "blocklist", "blocklist").set(0.0)
-    metrics.pihole_forward_destinations_responsevariance.labels(host, "blocklist", "blocklist").set(
-        0.0
+    metrics.METRICS.pihole_forward_destinations.labels(host, "blocklist", "blocklist").set(
+        float(bl_cnt)
     )
+    metrics.METRICS.pihole_forward_destinations_responsetime.labels(
+        host, "blocklist", "blocklist"
+    ).set(0.0)
+    metrics.METRICS.pihole_forward_destinations_responsevariance.labels(
+        host, "blocklist", "blocklist"
+    ).set(0.0)
 
 
 def _load_top_lists(
@@ -265,15 +271,15 @@ def _load_top_lists(
 ) -> None:
     cur.execute(SQL_TOP_ADS.format(blocked_list=blocked_list, top_n=top_n), (sod,))
     for domain, cnt in cur.fetchall():
-        metrics.pihole_top_ads.labels(host, str(domain)).set(float(cnt))
+        metrics.METRICS.pihole_top_ads.labels(host, str(domain)).set(float(cnt))
 
     cur.execute(SQL_TOP_QUERIES.format(top_n=top_n), (sod,))
     for domain, cnt in cur.fetchall():
-        metrics.pihole_top_queries.labels(host, str(domain)).set(float(cnt))
+        metrics.METRICS.pihole_top_queries.labels(host, str(domain)).set(float(cnt))
 
     cur.execute(SQL_TOP_SOURCES.format(top_n=top_n), (sod,))
     for ip, name, cnt in cur.fetchall():
-        metrics.pihole_top_sources.labels(host, str(ip), str(name or "")).set(float(cnt))
+        metrics.METRICS.pihole_top_sources.labels(host, str(ip), str(name or "")).set(float(cnt))
 
 
 def _load_domains_blocked(host: str) -> None:
@@ -297,7 +303,7 @@ def _load_domains_blocked(host: str) -> None:
             logger.warning("Fallback domain count failed: %s", e)
             domains_value = 0
 
-    metrics.pihole_domains_being_blocked.labels(host).set(float(domains_value))
+    metrics.METRICS.pihole_domains_being_blocked.labels(host).set(float(domains_value))
 
 
 def scrape_and_update():
@@ -307,7 +313,7 @@ def scrape_and_update():
 
     logger.debug("Scrape start (host=%s, sod=%s, now=%s, tz=%s)", host, sod, now, EXPORTER_TZ)
 
-    metrics.clear_dynamic_series()
+    metrics.METRICS.clear_dynamic_series()
     blocked_list = _blocked_status_list()
 
     with sqlite_ro(FTL_DB_PATH) as conn:
@@ -328,16 +334,16 @@ def scrape_and_update():
 
 
 def update_request_rate_for_request(now: float | None = None) -> None:
-    total, blocked = metrics.STATE.request_rate.update(
+    total, blocked = metrics.METRICS.state.request_rate.update(
         now=now,
         db_path=FTL_DB_PATH,
         host=HOSTNAME_LABEL,
-        rate_gauge=metrics.pihole_request_rate,
+        rate_gauge=metrics.METRICS.pihole_request_rate,
         sqlite_ro=sqlite_ro,
         logger=logger,
     )
     if total is not None and blocked is not None:
-        metrics.set_lifetime_totals(total, blocked)
+        metrics.METRICS.set_lifetime_totals(total, blocked)
 
 
 def _scrape_loop(
