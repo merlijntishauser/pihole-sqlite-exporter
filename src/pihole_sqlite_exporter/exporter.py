@@ -122,6 +122,7 @@ _blocked_queries_lifetime = 0
 _forward_destinations_lifetime = {}  # type: dict[str, int]
 _last_request_ts = None
 _last_request_total = None
+_last_request_rowid = None
 
 
 class PiholeTotalsCollector:
@@ -680,35 +681,46 @@ def refresh_counters_only() -> None:
 
 
 def update_request_rate_for_request(now: float | None = None) -> None:
-    global _last_request_ts, _last_request_total
+    global _last_request_ts, _last_request_total, _last_request_rowid
 
     if now is None:
         now = time.time()
 
     host = HOSTNAME_LABEL
-    if _last_request_ts is not None and _last_request_total is not None:
+    if _last_request_ts is not None and _last_request_rowid is not None:
         dt = max(1.0, now - _last_request_ts)
-        since_ts = int(_last_request_ts)
         try:
             with sqlite_ro(FTL_DB_PATH) as conn:
                 cur = conn.cursor()
                 cur.execute(
-                    "SELECT COUNT(*) FROM queries WHERE timestamp >= ?;",
-                    (since_ts,),
+                    "SELECT COUNT(*) FROM queries WHERE rowid > ?;",
+                    (_last_request_rowid,),
                 )
                 dq = int(cur.fetchone()[0])
+                cur.execute("SELECT MAX(rowid) FROM queries;")
+                rowid = cur.fetchone()[0]
         except Exception:
             logger.exception("Failed to compute request rate from queries table")
             dq = 0
+            rowid = _last_request_rowid
         rate = dq / dt
         pihole_request_rate.labels(host).set(rate)
         logger.debug("Request rate queries_delta=%d time_delta=%.3f rate=%.6f", dq, dt, rate)
     else:
         pihole_request_rate.labels(host).set(0.0)
         logger.debug("Request rate initialized to 0.0")
+        try:
+            with sqlite_ro(FTL_DB_PATH) as conn:
+                cur = conn.cursor()
+                cur.execute("SELECT MAX(rowid) FROM queries;")
+                rowid = cur.fetchone()[0]
+        except Exception:
+            logger.exception("Failed to read queries rowid for request rate init")
+            rowid = None
 
     _last_request_ts = now
     _last_request_total = _total_queries_lifetime
+    _last_request_rowid = rowid
 
 
 # ----------------------------

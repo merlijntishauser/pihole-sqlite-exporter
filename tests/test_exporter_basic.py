@@ -82,6 +82,7 @@ def test_scrape_falls_back_when_gravity_missing(
     monkeypatch.setattr(exp, "ENABLE_LIFETIME_DEST_COUNTERS", False)
     monkeypatch.setattr(exp, "_last_request_ts", None)
     monkeypatch.setattr(exp, "_last_request_total", None)
+    monkeypatch.setattr(exp, "_last_request_rowid", None)
 
     exp.scrape_and_update()
     metrics = exp.generate_latest(exp.REGISTRY).decode("utf-8")
@@ -104,6 +105,7 @@ def test_request_rate_after_second_scrape(
     monkeypatch.setattr(exp, "ENABLE_LIFETIME_DEST_COUNTERS", False)
     monkeypatch.setattr(exp, "_last_request_ts", None)
     monkeypatch.setattr(exp, "_last_request_total", None)
+    monkeypatch.setattr(exp, "_last_request_rowid", None)
 
     exp.scrape_and_update()
     exp.update_request_rate_for_request(now=base_time)
@@ -140,6 +142,7 @@ def test_lifetime_destinations_metric(
     monkeypatch.setattr(exp, "ENABLE_LIFETIME_DEST_COUNTERS", True)
     monkeypatch.setattr(exp, "_last_request_ts", None)
     monkeypatch.setattr(exp, "_last_request_total", None)
+    monkeypatch.setattr(exp, "_last_request_rowid", None)
 
     exp.scrape_and_update()
     metrics = exp.generate_latest(exp.REGISTRY).decode("utf-8")

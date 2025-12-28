@@ -157,6 +157,7 @@ def exporter_config(monkeypatch: pytest.MonkeyPatch, ftl_db: Path, gravity_db: P
     monkeypatch.setattr(exp, "ENABLE_LIFETIME_DEST_COUNTERS", False)
     monkeypatch.setattr(exp, "_last_request_ts", None)
     monkeypatch.setattr(exp, "_last_request_total", None)
+    monkeypatch.setattr(exp, "_last_request_rowid", None)
 
 
 @pytest.fixture
