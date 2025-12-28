@@ -2,6 +2,7 @@ import argparse
 import logging
 import os
 import sqlite3
+import threading
 import time
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -100,6 +101,8 @@ _blocked_queries_lifetime = 0
 
 # destination -> count (lifetime, monotonic, derived)
 _forward_destinations_lifetime = {}  # type: dict[str, int]
+_last_request_ts = None
+_last_request_total = None
 
 
 class PiholeTotalsCollector:
@@ -352,13 +355,8 @@ def variance(values):
 # ----------------------------
 # Scrape + update metrics
 # ----------------------------
-_last_total_queries_lifetime = None
-_last_rate_ts = None
-
-
 def scrape_and_update():
     global _total_queries_lifetime, _blocked_queries_lifetime, _forward_destinations_lifetime
-    global _last_total_queries_lifetime, _last_rate_ts
 
     host = HOSTNAME_LABEL
     sod = start_of_day_ts()
@@ -642,18 +640,26 @@ def scrape_and_update():
 
     pihole_domains_being_blocked.labels(host).set(float(domains_value))
 
-    # request_rate: delta of LIFETIME total queries over time since last scrape (monotonic-friendly)
-    if _last_total_queries_lifetime is not None and _last_rate_ts is not None:
-        dt = max(1.0, time.time() - _last_rate_ts)
-        dq = max(0, _total_queries_lifetime - _last_total_queries_lifetime)
-        pihole_request_rate.labels(host).set(dq / dt)
-        logger.debug("Request rate queries_delta=%d time_delta=%.3f rate=%.6f", dq, dt, dq / dt)
+
+def update_request_rate_for_request(now: float | None = None) -> None:
+    global _last_request_ts, _last_request_total
+
+    if now is None:
+        now = time.time()
+
+    host = HOSTNAME_LABEL
+    if _last_request_ts is not None and _last_request_total is not None:
+        dt = max(1.0, now - _last_request_ts)
+        dq = max(0, _total_queries_lifetime - _last_request_total)
+        rate = dq / dt
+        pihole_request_rate.labels(host).set(rate)
+        logger.debug("Request rate queries_delta=%d time_delta=%.3f rate=%.6f", dq, dt, rate)
     else:
         pihole_request_rate.labels(host).set(0.0)
         logger.debug("Request rate initialized to 0.0")
 
-    _last_total_queries_lifetime = _total_queries_lifetime
-    _last_rate_ts = time.time()
+    _last_request_ts = now
+    _last_request_total = _total_queries_lifetime
 
 
 # ----------------------------
@@ -669,7 +675,7 @@ class Handler(BaseHTTPRequestHandler):
         try:
             logger.info("HTTP request: %s %s", self.command, self.path)
             start = time.time()
-            scrape_and_update()
+            update_request_rate_for_request(start)
             payload = generate_latest(REGISTRY)
             self.send_response(200)
             self.send_header("Content-Type", CONTENT_TYPE_LATEST)
@@ -691,6 +697,24 @@ class Handler(BaseHTTPRequestHandler):
 
     def log_message(self, format, *args):
         return
+
+
+def _scrape_loop(
+    stop_event: threading.Event | None = None,
+    sleep_fn=time.sleep,
+    time_fn=time.time,
+) -> None:
+    interval = max(1, SCRAPE_INTERVAL)
+    while True:
+        if stop_event is not None and stop_event.is_set():
+            return
+        start = time_fn()
+        try:
+            scrape_and_update()
+        except Exception:
+            logger.exception("Background scrape failed")
+        elapsed = time_fn() - start
+        sleep_fn(max(1.0, interval - elapsed))
 
 
 def parse_args():
@@ -717,6 +741,14 @@ def main():
         TOP_N,
         ENABLE_LIFETIME_DEST_COUNTERS,
     )
+
+    try:
+        scrape_and_update()
+    except Exception:
+        logger.exception("Initial scrape failed")
+
+    thread = threading.Thread(target=_scrape_loop, daemon=True)
+    thread.start()
 
     httpd = HTTPServer((LISTEN_ADDR, LISTEN_PORT), Handler)
     logger.info("HTTP server ready; waiting for scrapes")

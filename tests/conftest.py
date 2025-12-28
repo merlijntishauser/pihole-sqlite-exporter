@@ -133,13 +133,14 @@ def exporter_config(monkeypatch: pytest.MonkeyPatch, ftl_db: Path, gravity_db: P
     monkeypatch.setattr(exp, "EXPORTER_TZ", "UTC")
     monkeypatch.setattr(exp, "TOP_N", 10)
     monkeypatch.setattr(exp, "ENABLE_LIFETIME_DEST_COUNTERS", False)
-    monkeypatch.setattr(exp, "_last_total_queries_lifetime", None)
-    monkeypatch.setattr(exp, "_last_rate_ts", None)
+    monkeypatch.setattr(exp, "_last_request_ts", None)
+    monkeypatch.setattr(exp, "_last_request_total", None)
 
 
 @pytest.fixture
 def metrics_text(exporter_config: None) -> str:
     exp.scrape_and_update()
+    exp.update_request_rate_for_request()
     return generate_latest(exp.REGISTRY).decode("utf-8")
 
 

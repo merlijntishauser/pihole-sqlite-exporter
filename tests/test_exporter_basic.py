@@ -80,8 +80,8 @@ def test_scrape_falls_back_when_gravity_missing(
     monkeypatch.setattr(exp, "HOSTNAME_LABEL", "test-host")
     monkeypatch.setattr(exp, "EXPORTER_TZ", "UTC")
     monkeypatch.setattr(exp, "ENABLE_LIFETIME_DEST_COUNTERS", False)
-    monkeypatch.setattr(exp, "_last_total_queries_lifetime", None)
-    monkeypatch.setattr(exp, "_last_rate_ts", None)
+    monkeypatch.setattr(exp, "_last_request_ts", None)
+    monkeypatch.setattr(exp, "_last_request_total", None)
 
     exp.scrape_and_update()
     metrics = exp.generate_latest(exp.REGISTRY).decode("utf-8")
@@ -97,16 +97,16 @@ def test_request_rate_after_second_scrape(
     monkeypatch.setattr(exp, "HOSTNAME_LABEL", "test-host")
     monkeypatch.setattr(exp, "EXPORTER_TZ", "UTC")
     monkeypatch.setattr(exp, "ENABLE_LIFETIME_DEST_COUNTERS", False)
-    monkeypatch.setattr(exp, "_last_total_queries_lifetime", None)
-    monkeypatch.setattr(exp, "_last_rate_ts", None)
+    monkeypatch.setattr(exp, "_last_request_ts", None)
+    monkeypatch.setattr(exp, "_last_request_total", None)
 
     base_time = time.time()
-    monkeypatch.setattr(exp.time, "time", lambda: base_time)
     exp.scrape_and_update()
+    exp.update_request_rate_for_request(now=base_time)
 
     update_counters(ftl_path, total=7, blocked=2)
-    monkeypatch.setattr(exp.time, "time", lambda: base_time + 10)
     exp.scrape_and_update()
+    exp.update_request_rate_for_request(now=base_time + 10)
 
     metrics = exp.generate_latest(exp.REGISTRY).decode("utf-8")
     assert metric_value(metrics, "pihole_request_rate", {"hostname": "test-host"}) == pytest.approx(
@@ -130,8 +130,8 @@ def test_lifetime_destinations_metric(
     monkeypatch.setattr(exp, "HOSTNAME_LABEL", "test-host")
     monkeypatch.setattr(exp, "EXPORTER_TZ", "UTC")
     monkeypatch.setattr(exp, "ENABLE_LIFETIME_DEST_COUNTERS", True)
-    monkeypatch.setattr(exp, "_last_total_queries_lifetime", None)
-    monkeypatch.setattr(exp, "_last_rate_ts", None)
+    monkeypatch.setattr(exp, "_last_request_ts", None)
+    monkeypatch.setattr(exp, "_last_request_total", None)
 
     exp.scrape_and_update()
     metrics = exp.generate_latest(exp.REGISTRY).decode("utf-8")
@@ -154,9 +154,9 @@ def test_handler_returns_404_for_unknown_path() -> None:
 def test_handler_returns_500_on_scrape_error(monkeypatch: pytest.MonkeyPatch) -> None:
     handler = DummyHandler("/metrics")
 
-    def _raise():
+    def _raise(registry):
         raise RuntimeError("boom")
 
-    monkeypatch.setattr(exp, "scrape_and_update", _raise)
+    monkeypatch.setattr(exp, "generate_latest", _raise)
     handler.do_GET()
     assert handler.sent_status == 500
