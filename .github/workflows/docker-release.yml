@@ -55,7 +55,7 @@ jobs:
       - name: Sync main
         run: |
           git fetch origin main
-          git rebase origin/main
+          git checkout -B main origin/main
 
       - name: Update repository overview
         run: python3 scripts/update_overview.py
