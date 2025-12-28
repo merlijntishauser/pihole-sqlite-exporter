@@ -33,7 +33,7 @@ def test_scrape_falls_back_when_gravity_missing(
     monkeypatch.setattr(scraper, "EXPORTER_TZ", "UTC")
     monkeypatch.setattr(scraper, "ENABLE_LIFETIME_DEST_COUNTERS", False)
     metrics.set_hostname_label("test-host")
-    scraper._request_rate.reset()
+    metrics.STATE.request_rate.reset()
 
     scraper.scrape_and_update()
     metrics_text = generate_latest(metrics.REGISTRY).decode("utf-8")
@@ -57,7 +57,7 @@ def test_request_rate_after_second_scrape(
     monkeypatch.setattr(scraper, "EXPORTER_TZ", "UTC")
     monkeypatch.setattr(scraper, "ENABLE_LIFETIME_DEST_COUNTERS", False)
     metrics.set_hostname_label("test-host")
-    scraper._request_rate.reset()
+    metrics.STATE.request_rate.reset()
 
     scraper.scrape_and_update()
     scraper.update_request_rate_for_request(now=base_time)
@@ -93,7 +93,7 @@ def test_lifetime_destinations_metric(
     monkeypatch.setattr(scraper, "EXPORTER_TZ", "UTC")
     monkeypatch.setattr(scraper, "ENABLE_LIFETIME_DEST_COUNTERS", True)
     metrics.set_hostname_label("test-host")
-    scraper._request_rate.reset()
+    metrics.STATE.request_rate.reset()
 
     scraper.scrape_and_update()
     metrics_text = generate_latest(metrics.REGISTRY).decode("utf-8")
