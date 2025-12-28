@@ -7,7 +7,6 @@
 
 ## Medium-term
 
-- Add a simple config/settings dataclass to validate env overrides and defaults in one place (scraper + HTTP server).
 - Reduce global state: scraper.py still relies on module globals for config and metrics state. Consider a small ScrapeContext passed to functions so
   tests and runtime are less stateful.
 - Add a tiny metrics registry factory for tests to reduce reliance on module globals.

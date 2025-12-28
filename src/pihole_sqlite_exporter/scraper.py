@@ -31,6 +31,7 @@ from .queries import (
     SQL_UNIQUE_CLIENTS,
     SQL_UNIQUE_DOMAINS,
 )
+from .settings import Settings
 
 logger = logging.getLogger("pihole_sqlite_exporter")
 _SCRAPE_LOCK = threading.Lock()
@@ -41,18 +42,20 @@ def env_truthy(name: str, default: str = "false") -> bool:
     return str(value).strip().lower() in {"1", "true", "t", "yes", "y", "on"}
 
 
-FTL_DB_PATH = os.getenv("FTL_DB_PATH", "/etc/pihole/pihole-FTL.db")
-GRAVITY_DB_PATH = os.getenv("GRAVITY_DB_PATH", "/etc/pihole/gravity.db")
+SETTINGS = Settings.from_env()
 
-LISTEN_ADDR = os.getenv("LISTEN_ADDR", "0.0.0.0")
-LISTEN_PORT = int(os.getenv("LISTEN_PORT", "9617"))
+FTL_DB_PATH = SETTINGS.ftl_db_path
+GRAVITY_DB_PATH = SETTINGS.gravity_db_path
 
-HOSTNAME_LABEL = os.getenv("HOSTNAME_LABEL", "host.docker.internal")
-TOP_N = int(os.getenv("TOP_N", "10"))
-SCRAPE_INTERVAL = int(os.getenv("SCRAPE_INTERVAL", "15"))
+LISTEN_ADDR = SETTINGS.listen_addr
+LISTEN_PORT = SETTINGS.listen_port
 
-EXPORTER_TZ = os.getenv("EXPORTER_TZ", "Europe/Amsterdam")
-ENABLE_LIFETIME_DEST_COUNTERS = env_truthy("ENABLE_LIFETIME_DEST_COUNTERS", "true")
+HOSTNAME_LABEL = SETTINGS.hostname_label
+TOP_N = SETTINGS.top_n
+SCRAPE_INTERVAL = SETTINGS.scrape_interval
+
+EXPORTER_TZ = SETTINGS.exporter_tz
+ENABLE_LIFETIME_DEST_COUNTERS = SETTINGS.enable_lifetime_dest_counters
 
 metrics.METRICS.set_hostname_label(HOSTNAME_LABEL)
 
