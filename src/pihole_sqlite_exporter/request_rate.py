@@ -3,6 +3,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from .db import fetch_scalar
 from .queries import SQL_COUNTER_BLOCKED, SQL_COUNTER_TOTAL
 
 
@@ -63,14 +64,11 @@ class RequestRateTracker:
         try:
             with sqlite_ro(db_path) as conn:
                 cur = conn.cursor()
-                cur.execute(SQL_COUNTER_TOTAL)
-                total = int(cur.fetchone()[0])
-                cur.execute(SQL_COUNTER_BLOCKED)
-                blocked = int(cur.fetchone()[0])
+                total = int(fetch_scalar(cur, SQL_COUNTER_TOTAL))
+                blocked = int(fetch_scalar(cur, SQL_COUNTER_BLOCKED))
                 cursor_col = self._detect_cursor(cur)
                 if cursor_col:
-                    cur.execute(f"SELECT MAX({cursor_col}) FROM queries;")
-                    latest_cursor = cur.fetchone()[0]
+                    latest_cursor = fetch_scalar(cur, f"SELECT MAX({cursor_col}) FROM queries;")
                 elif not self._logged_no_cursor:
                     logger.warning(
                         "Request rate cursor unavailable (no rowid/id); falling back to counters "
