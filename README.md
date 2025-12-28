@@ -7,7 +7,7 @@ Prometheus exporter that reads Pi-hole metrics from **pihole-FTL.db** (and optio
 - **Docker image:** hardened minimal runtime (non-root by default) with an HTTP healthcheck on `/metrics`.
 - **Docker Hub:** https://hub.docker.com/r/merlijntishauser/pihole-sqlite-exporter
 - **GitHub:** https://github.com/merlijntishauser/pihole-sqlite-exporter
-- **Scan summary (2025-12-28 09:28 UTC):** Dockle: INFO=2, PASS=15. Trivy: 0 vulnerabilities detected.
+- **Scan summary:** pending (generated on release tags).
 <!-- overview:end -->
 
 ## Why
@@ -36,7 +36,6 @@ Exposes, among others:
 | LISTEN_ADDR | 0.0.0.0 | bind address |
 | LISTEN_PORT | 9617 | bind port |
 | TOP_N | 10 | top list size |
-| REQUEST_RATE_WINDOW_SEC | 60 | seconds window for pihole_request_rate |
 | DEBUG | false | enable debug logging |
 
 ## CLI
