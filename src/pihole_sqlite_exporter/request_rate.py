@@ -3,6 +3,8 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from .queries import SQL_COUNTER_BLOCKED, SQL_COUNTER_TOTAL
+
 
 @dataclass
 class RequestRateTracker:
@@ -59,9 +61,9 @@ class RequestRateTracker:
         try:
             with sqlite_ro(db_path) as conn:
                 cur = conn.cursor()
-                cur.execute("SELECT value FROM counters WHERE id = 0;")
+                cur.execute(SQL_COUNTER_TOTAL)
                 total = int(cur.fetchone()[0])
-                cur.execute("SELECT value FROM counters WHERE id = 1;")
+                cur.execute(SQL_COUNTER_BLOCKED)
                 blocked = int(cur.fetchone()[0])
                 cursor_col = self._detect_cursor(cur)
                 if cursor_col:
