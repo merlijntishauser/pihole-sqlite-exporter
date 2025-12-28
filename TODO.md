@@ -4,7 +4,6 @@
 
 - Make `ENABLE_LIFETIME_DEST_COUNTERS` a runtime toggle in logs and metrics (emit when disabled) to explain missing series.
 - Consolidate log context (hostname, tz, sod, now) into a helper so scrape logs stay consistent and easy to search.
-- Add a small SQLite helper for scalar fetches (reduce repeated execute/fetchone boilerplate).
 
 ## Medium-term
 
