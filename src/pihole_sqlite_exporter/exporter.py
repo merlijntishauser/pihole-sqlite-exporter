@@ -6,6 +6,7 @@ import threading
 import time
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from prometheus_client import CONTENT_TYPE_LATEST, CollectorRegistry, Gauge, generate_latest
@@ -15,6 +16,24 @@ from prometheus_client.core import CounterMetricFamily
 # Logging
 # ----------------------------
 logger = logging.getLogger("pihole_sqlite_exporter")
+
+
+def _read_version() -> str:
+    version_path = Path(__file__).resolve().parents[2] / "VERSION"
+    if version_path.is_file():
+        return version_path.read_text().strip()
+    try:
+        from . import __version__  # type: ignore
+
+        return str(__version__)
+    except Exception:
+        return "unknown"
+
+
+def _read_commit() -> str:
+    return (
+        os.getenv("GIT_COMMIT") or os.getenv("GIT_SHA") or os.getenv("SOURCE_COMMIT") or "unknown"
+    )
 
 
 def _env_truthy(name: str, default: str = "false") -> bool:
@@ -727,6 +746,7 @@ def main():
     args = parse_args()
     verbose = bool(args.verbose) or _env_truthy("DEBUG", "false")
     configure_logging(verbose)
+    logger.info("Exporter version=%s commit=%s", _read_version(), _read_commit())
 
     logger.info(
         (

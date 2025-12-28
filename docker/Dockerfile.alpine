@@ -1,8 +1,12 @@
 ARG PYTHON_BASE_IMAGE=dhi.io/python:3-alpine3.22
+ARG GIT_COMMIT=unknown
 FROM ${PYTHON_BASE_IMAGE}
+
+ENV GIT_COMMIT=${GIT_COMMIT}
 
 WORKDIR /app
 
+COPY VERSION /app/VERSION
 COPY requirements.txt /app/requirements.txt
 RUN ["python3", "-m", "pip", "install", "--no-cache-dir", "--target", "/app/src", "-r", "/app/requirements.txt"]
 

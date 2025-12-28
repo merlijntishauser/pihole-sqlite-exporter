@@ -44,7 +44,7 @@ jobs:
             latest=true
 
       - name: Build image for scans
-        run: docker build -f docker/Dockerfile.alpine -t scan-image:${{ github.sha }} .
+        run: docker build -f docker/Dockerfile.alpine --build-arg GIT_COMMIT=${{ github.sha }} -t scan-image:${{ github.sha }} .
 
       - name: Dockle scan
         run: docker run --rm -v /var/run/docker.sock:/var/run/docker.sock goodwithtech/dockle:latest --format json scan-image:${{ github.sha }} > dockle.json
@@ -80,6 +80,8 @@ jobs:
           file: docker/Dockerfile.alpine
           push: true
           platforms: linux/amd64,linux/arm64
+          build-args: |
+            GIT_COMMIT=${{ github.sha }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
