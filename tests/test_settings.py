@@ -1,6 +1,6 @@
 import pytest
 
-from pihole_sqlite_exporter.settings import Settings
+from pihole_sqlite_exporter.settings import Settings, env_truthy
 
 
 class TestSettings:
@@ -41,3 +41,14 @@ class TestSettings:
     def test_settings_from_env_invalid(self, env, error: str) -> None:
         with pytest.raises(ValueError, match=error):
             Settings.from_env(env)
+
+
+class TestEnvTruthy:
+    def test_env_truthy_reads_yes(self) -> None:
+        assert env_truthy("TEST_TRUTHY", env={"TEST_TRUTHY": "yes"}) is True
+
+    def test_env_truthy_reads_zero(self) -> None:
+        assert env_truthy("TEST_FALSY", env={"TEST_FALSY": "0"}) is False
+
+    def test_env_truthy_default_true(self) -> None:
+        assert env_truthy("MISSING", "true", env={}) is True

@@ -13,5 +13,4 @@
 
 ## Later
 
-- Move QUERY/REPLY maps and blocked status set into a constants module to declutter scraper.py.
 - Consider a scrape-skipped counter metric to quantify contention between HTTP requests and background scrape loop.

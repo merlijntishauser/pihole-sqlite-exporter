@@ -6,12 +6,13 @@ from pathlib import Path
 from prometheus_client import generate_latest as _generate_latest
 
 from . import http_server, metrics, scraper
+from .settings import env_truthy
 
 logger = logging.getLogger("pihole_sqlite_exporter")
 
 
 def _env_truthy(name: str, default: str = "false") -> bool:
-    return scraper.env_truthy(name, default)
+    return env_truthy(name, default)
 
 
 def _get_tz():
@@ -77,14 +78,14 @@ def main():
             "Starting exporter (listen=%s:%s, tz=%s, ftl_db=%s, gravity_db=%s, top_n=%s, "
             "lifetime_dest_counters=%s, scrape_interval=%s)"
         ),
-        scraper.LISTEN_ADDR,
-        scraper.LISTEN_PORT,
-        scraper.EXPORTER_TZ,
-        scraper.FTL_DB_PATH,
-        scraper.GRAVITY_DB_PATH,
-        scraper.TOP_N,
-        scraper.ENABLE_LIFETIME_DEST_COUNTERS,
-        scraper.SCRAPE_INTERVAL,
+        scraper.SETTINGS.listen_addr,
+        scraper.SETTINGS.listen_port,
+        scraper.SETTINGS.exporter_tz,
+        scraper.SETTINGS.ftl_db_path,
+        scraper.SETTINGS.gravity_db_path,
+        scraper.SETTINGS.top_n,
+        scraper.SETTINGS.enable_lifetime_dest_counters,
+        scraper.SETTINGS.scrape_interval,
     )
 
     try:
@@ -95,7 +96,7 @@ def main():
     scraper.start_background_scrape()
 
     handler = http_server.make_handler(update_request_rate_for_request, REGISTRY, logger)
-    http_server.serve(scraper.LISTEN_ADDR, scraper.LISTEN_PORT, handler)
+    http_server.serve(scraper.SETTINGS.listen_addr, scraper.SETTINGS.listen_port, handler)
 
 
 if __name__ == "__main__":

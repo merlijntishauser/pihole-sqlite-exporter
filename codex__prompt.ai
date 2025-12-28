@@ -13,6 +13,7 @@ Project context
 - SQL queries live in src/pihole_sqlite_exporter/queries.py.
 - Metrics gauges and collectors are defined in src/pihole_sqlite_exporter/metrics.py.
 - Request rate tracking lives in src/pihole_sqlite_exporter/request_rate.py.
+- Constants (blocked statuses, query/reply maps) live in src/pihole_sqlite_exporter/constants.py.
 
 Workflow preferences
 - Use rg for search.

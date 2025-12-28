@@ -1,5 +1,4 @@
 import logging
-import os
 import sqlite3
 import threading
 import time
@@ -7,6 +6,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from . import metrics
+from .constants import BLOCKED_STATUSES, QUERY_TYPE_MAP, REPLY_TYPE_MAP
 from .db import fetch_scalar, sqlite_ro
 from .queries import (
     SQL_BLOCKED_TODAY,
@@ -37,74 +37,18 @@ logger = logging.getLogger("pihole_sqlite_exporter")
 _SCRAPE_LOCK = threading.Lock()
 
 
-def env_truthy(name: str, default: str = "false") -> bool:
-    value = os.getenv(name, default)
-    return str(value).strip().lower() in {"1", "true", "t", "yes", "y", "on"}
-
-
 SETTINGS = Settings.from_env()
-
-FTL_DB_PATH = SETTINGS.ftl_db_path
-GRAVITY_DB_PATH = SETTINGS.gravity_db_path
-
-LISTEN_ADDR = SETTINGS.listen_addr
-LISTEN_PORT = SETTINGS.listen_port
-
-HOSTNAME_LABEL = SETTINGS.hostname_label
-TOP_N = SETTINGS.top_n
-SCRAPE_INTERVAL = SETTINGS.scrape_interval
-
-EXPORTER_TZ = SETTINGS.exporter_tz
-ENABLE_LIFETIME_DEST_COUNTERS = SETTINGS.enable_lifetime_dest_counters
-
-metrics.METRICS.set_hostname_label(HOSTNAME_LABEL)
-
-
-BLOCKED_STATUSES = {1, 4, 5, 6, 7, 8, 9, 10, 11, 15}
-
-QUERY_TYPE_MAP = {
-    1: "A",
-    2: "AAAA",
-    3: "ANY",
-    4: "SRV",
-    5: "SOA",
-    6: "PTR",
-    7: "TXT",
-    8: "NAPTR",
-    9: "MX",
-    10: "DS",
-    11: "RRSIG",
-    12: "DNSKEY",
-    13: "NS",
-    14: "OTHER",
-    15: "SVCB",
-    16: "HTTPS",
-}
-
-REPLY_TYPE_MAP = {
-    0: "unknown",
-    1: "no_data",
-    2: "nx_domain",
-    3: "cname",
-    4: "ip",
-    5: "domain",
-    6: "rr_name",
-    7: "serv_fail",
-    8: "refused",
-    9: "not_imp",
-    10: "other",
-    11: "dnssec",
-    12: "none",
-    13: "blob",
-}
+metrics.METRICS.set_hostname_label(SETTINGS.hostname_label)
 
 
 def get_tz() -> ZoneInfo:
     try:
-        return ZoneInfo(EXPORTER_TZ)
+        return ZoneInfo(SETTINGS.exporter_tz)
     except Exception as e:
         logger.warning(
-            "Invalid EXPORTER_TZ=%r; falling back to local tz. Reason: %s", EXPORTER_TZ, e
+            "Invalid EXPORTER_TZ=%r; falling back to local tz. Reason: %s",
+            SETTINGS.exporter_tz,
+            e,
         )
         return datetime.now().astimezone().tzinfo  # type: ignore[return-value]
 
@@ -149,7 +93,7 @@ def _load_counters(cur: sqlite3.Cursor, host: str) -> tuple[int, int]:
 
 
 def _load_lifetime_destinations(cur: sqlite3.Cursor, blocked_list: str) -> None:
-    if not ENABLE_LIFETIME_DEST_COUNTERS:
+    if not SETTINGS.enable_lifetime_dest_counters:
         metrics.METRICS.set_forward_destinations_lifetime({})
         return
 
@@ -281,7 +225,7 @@ def _load_top_lists(
 def _load_domains_blocked(host: str) -> None:
     domains_value = None
     try:
-        with sqlite_ro(GRAVITY_DB_PATH) as gconn:
+        with sqlite_ro(SETTINGS.gravity_db_path) as gconn:
             gcur = gconn.cursor()
             domains_value = int(fetch_scalar(gcur, SQL_GRAVITY_COUNT))
     except Exception as e:
@@ -290,7 +234,7 @@ def _load_domains_blocked(host: str) -> None:
 
     if domains_value is None:
         try:
-            with sqlite_ro(FTL_DB_PATH) as conn:
+            with sqlite_ro(SETTINGS.ftl_db_path) as conn:
                 cur = conn.cursor()
                 domains_value = int(fetch_scalar(cur, SQL_DOMAIN_BY_ID_COUNT))
                 logger.info("Gravity DB fallback: using FTL domain count")
@@ -305,25 +249,31 @@ def scrape_and_update():
     if not _SCRAPE_LOCK.acquire(blocking=False):
         logger.info(
             "Scrape skipped (host=%s, tz=%s, sod=%s, now=%s); another scrape is still in progress",
-            HOSTNAME_LABEL,
-            EXPORTER_TZ,
+            SETTINGS.hostname_label,
+            SETTINGS.exporter_tz,
             start_of_day_ts(),
             now_ts(),
         )
         return
-    host = HOSTNAME_LABEL
+    host = SETTINGS.hostname_label
     sod = start_of_day_ts()
     now = now_ts()
     start = time.perf_counter()
     success = 0.0
 
-    logger.debug("Scrape start (host=%s, sod=%s, now=%s, tz=%s)", host, sod, now, EXPORTER_TZ)
+    logger.debug(
+        "Scrape start (host=%s, sod=%s, now=%s, tz=%s)",
+        host,
+        sod,
+        now,
+        SETTINGS.exporter_tz,
+    )
 
     try:
         metrics.METRICS.clear_dynamic_series()
         blocked_list = _blocked_status_list()
 
-        with sqlite_ro(FTL_DB_PATH) as conn:
+        with sqlite_ro(SETTINGS.ftl_db_path) as conn:
             cur = conn.cursor()
             _load_counters(cur, host)
             _load_lifetime_destinations(cur, blocked_list)
@@ -335,13 +285,17 @@ def scrape_and_update():
             _load_forwarded_cached(cur, host, sod)
             _load_forward_destinations(cur, host, sod)
             _load_synthetic_destinations(cur, host, sod, blocked_list)
-            _load_top_lists(cur, host, sod, blocked_list, TOP_N)
+            _load_top_lists(cur, host, sod, blocked_list, SETTINGS.top_n)
 
         _load_domains_blocked(host)
         success = 1.0
     except Exception:
         logger.exception(
-            "Scrape failed (host=%s, tz=%s, sod=%s, now=%s)", host, EXPORTER_TZ, sod, now
+            "Scrape failed (host=%s, tz=%s, sod=%s, now=%s)",
+            host,
+            SETTINGS.exporter_tz,
+            sod,
+            now,
         )
         raise
     finally:
@@ -352,7 +306,7 @@ def scrape_and_update():
         logger.info(
             "Scrape completed (host=%s, tz=%s, sod=%s, now=%s) duration=%.3fs success=%s",
             host,
-            EXPORTER_TZ,
+            SETTINGS.exporter_tz,
             sod,
             now,
             duration,
@@ -363,8 +317,8 @@ def scrape_and_update():
 def update_request_rate_for_request(now: float | None = None) -> None:
     total, blocked = metrics.METRICS.state.request_rate.update(
         now=now,
-        db_path=FTL_DB_PATH,
-        host=HOSTNAME_LABEL,
+        db_path=SETTINGS.ftl_db_path,
+        host=SETTINGS.hostname_label,
         rate_gauge=metrics.METRICS.pihole_request_rate,
         sqlite_ro=sqlite_ro,
         logger=logger,
@@ -378,7 +332,7 @@ def _scrape_loop(
     sleep_fn=time.sleep,
     time_fn=time.time,
 ) -> None:
-    interval = max(1, SCRAPE_INTERVAL)
+    interval = max(1, SETTINGS.scrape_interval)
     while True:
         if stop_event is not None and stop_event.is_set():
             return

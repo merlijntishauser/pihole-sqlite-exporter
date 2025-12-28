@@ -70,12 +70,12 @@ def gravity_db(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def exporter_config(monkeypatch: pytest.MonkeyPatch, ftl_db: Path, gravity_db: Path) -> None:
-    monkeypatch.setattr(scraper, "FTL_DB_PATH", str(ftl_db))
-    monkeypatch.setattr(scraper, "GRAVITY_DB_PATH", str(gravity_db))
-    monkeypatch.setattr(scraper, "HOSTNAME_LABEL", "test-host")
-    monkeypatch.setattr(scraper, "EXPORTER_TZ", "UTC")
-    monkeypatch.setattr(scraper, "TOP_N", 10)
-    monkeypatch.setattr(scraper, "ENABLE_LIFETIME_DEST_COUNTERS", False)
+    monkeypatch.setattr(scraper.SETTINGS, "ftl_db_path", str(ftl_db))
+    monkeypatch.setattr(scraper.SETTINGS, "gravity_db_path", str(gravity_db))
+    monkeypatch.setattr(scraper.SETTINGS, "hostname_label", "test-host")
+    monkeypatch.setattr(scraper.SETTINGS, "exporter_tz", "UTC")
+    monkeypatch.setattr(scraper.SETTINGS, "top_n", 10)
+    monkeypatch.setattr(scraper.SETTINGS, "enable_lifetime_dest_counters", False)
     metrics.METRICS.set_hostname_label("test-host")
     metrics.METRICS.state.request_rate.reset()
 

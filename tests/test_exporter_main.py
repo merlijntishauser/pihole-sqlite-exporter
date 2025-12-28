@@ -34,8 +34,8 @@ class TestExporterMain:
         assert called["verbose"] is True
         assert called["scrape"] is True
         assert called["background"] is True
-        assert called["serve"][0] == exporter.scraper.LISTEN_ADDR
-        assert called["serve"][1] == exporter.scraper.LISTEN_PORT
+        assert called["serve"][0] == exporter.scraper.SETTINGS.listen_addr
+        assert called["serve"][1] == exporter.scraper.SETTINGS.listen_port
 
     def test_main_handles_initial_scrape_failure(
         self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
@@ -66,7 +66,7 @@ class TestExporterMain:
 
         assert called["scrape"] is True
         assert called["background"] is True
-        assert called["serve"][0] == exporter.scraper.LISTEN_ADDR
+        assert called["serve"][0] == exporter.scraper.SETTINGS.listen_addr
         assert "Initial scrape failed" in caplog.text
 
 

@@ -35,11 +35,11 @@ def test_scrape_falls_back_when_gravity_missing(
 ) -> None:
     ftl_path = ftl_db_factory(domain_count=2)
     gravity_path = tmp_path / "missing-gravity.db"
-    monkeypatch.setattr(scraper, "FTL_DB_PATH", str(ftl_path))
-    monkeypatch.setattr(scraper, "GRAVITY_DB_PATH", str(gravity_path))
-    monkeypatch.setattr(scraper, "HOSTNAME_LABEL", "test-host")
-    monkeypatch.setattr(scraper, "EXPORTER_TZ", "UTC")
-    monkeypatch.setattr(scraper, "ENABLE_LIFETIME_DEST_COUNTERS", False)
+    monkeypatch.setattr(scraper.SETTINGS, "ftl_db_path", str(ftl_path))
+    monkeypatch.setattr(scraper.SETTINGS, "gravity_db_path", str(gravity_path))
+    monkeypatch.setattr(scraper.SETTINGS, "hostname_label", "test-host")
+    monkeypatch.setattr(scraper.SETTINGS, "exporter_tz", "UTC")
+    monkeypatch.setattr(scraper.SETTINGS, "enable_lifetime_dest_counters", False)
     metrics.METRICS.set_hostname_label("test-host")
     metrics.METRICS.state.request_rate.reset()
 
@@ -59,11 +59,11 @@ def test_request_rate_after_second_scrape(
         (base_time - 90, 3, 2, 2, None, None, "cached.com", "10.0.0.2"),
     ]
     ftl_path = ftl_db_factory(counters=(5, 1), queries=initial_queries)
-    monkeypatch.setattr(scraper, "FTL_DB_PATH", str(ftl_path))
-    monkeypatch.setattr(scraper, "GRAVITY_DB_PATH", str(ftl_path))
-    monkeypatch.setattr(scraper, "HOSTNAME_LABEL", "test-host")
-    monkeypatch.setattr(scraper, "EXPORTER_TZ", "UTC")
-    monkeypatch.setattr(scraper, "ENABLE_LIFETIME_DEST_COUNTERS", False)
+    monkeypatch.setattr(scraper.SETTINGS, "ftl_db_path", str(ftl_path))
+    monkeypatch.setattr(scraper.SETTINGS, "gravity_db_path", str(ftl_path))
+    monkeypatch.setattr(scraper.SETTINGS, "hostname_label", "test-host")
+    monkeypatch.setattr(scraper.SETTINGS, "exporter_tz", "UTC")
+    monkeypatch.setattr(scraper.SETTINGS, "enable_lifetime_dest_counters", False)
     metrics.METRICS.set_hostname_label("test-host")
     metrics.METRICS.state.request_rate.reset()
 
@@ -95,11 +95,11 @@ def test_lifetime_destinations_metric(
         (now_ts - 40, 1, 1, 2, None, None, "ads.com", "10.0.0.1"),
     ]
     ftl_path = ftl_db_factory(queries=queries)
-    monkeypatch.setattr(scraper, "FTL_DB_PATH", str(ftl_path))
-    monkeypatch.setattr(scraper, "GRAVITY_DB_PATH", str(ftl_path))
-    monkeypatch.setattr(scraper, "HOSTNAME_LABEL", "test-host")
-    monkeypatch.setattr(scraper, "EXPORTER_TZ", "UTC")
-    monkeypatch.setattr(scraper, "ENABLE_LIFETIME_DEST_COUNTERS", True)
+    monkeypatch.setattr(scraper.SETTINGS, "ftl_db_path", str(ftl_path))
+    monkeypatch.setattr(scraper.SETTINGS, "gravity_db_path", str(ftl_path))
+    monkeypatch.setattr(scraper.SETTINGS, "hostname_label", "test-host")
+    monkeypatch.setattr(scraper.SETTINGS, "exporter_tz", "UTC")
+    monkeypatch.setattr(scraper.SETTINGS, "enable_lifetime_dest_counters", True)
     metrics.METRICS.set_hostname_label("test-host")
     metrics.METRICS.state.request_rate.reset()
 

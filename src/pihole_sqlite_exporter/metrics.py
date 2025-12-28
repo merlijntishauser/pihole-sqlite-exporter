@@ -1,5 +1,3 @@
-import os
-
 from prometheus_client import CollectorRegistry, Gauge
 from prometheus_client.core import CounterMetricFamily
 
@@ -239,4 +237,4 @@ class Metrics:
         self.pihole_forward_destinations_responsevariance.clear()
 
 
-METRICS = Metrics(os.getenv("HOSTNAME_LABEL", "host.docker.internal"))
+METRICS = Metrics("host.docker.internal")

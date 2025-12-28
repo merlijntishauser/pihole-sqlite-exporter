@@ -2,7 +2,7 @@ import os
 from dataclasses import dataclass
 
 
-@dataclass(frozen=True)
+@dataclass
 class Settings:
     ftl_db_path: str
     gravity_db_path: str
@@ -29,10 +29,6 @@ class Settings:
                 raise ValueError(f"{name} must be >= 1 (got {value!r})")
             return parsed
 
-        def _get_bool(name: str, default: str) -> bool:
-            value = _get(name, default)
-            return str(value).strip().lower() in {"1", "true", "t", "yes", "y", "on"}
-
         listen_port = _get_int("LISTEN_PORT", 9617)
         if listen_port > 65535:
             raise ValueError(f"LISTEN_PORT must be <= 65535 (got {listen_port!r})")
@@ -46,5 +42,12 @@ class Settings:
             top_n=_get_int("TOP_N", 10),
             scrape_interval=_get_int("SCRAPE_INTERVAL", 15),
             exporter_tz=_get("EXPORTER_TZ", "Europe/Amsterdam"),
-            enable_lifetime_dest_counters=_get_bool("ENABLE_LIFETIME_DEST_COUNTERS", "true"),
+            enable_lifetime_dest_counters=env_truthy("ENABLE_LIFETIME_DEST_COUNTERS", "true", env),
         )
+
+
+def env_truthy(name: str, default: str = "false", env: dict[str, str] | None = None) -> bool:
+    if env is None:
+        env = os.environ
+    value = env.get(name, default)
+    return str(value).strip().lower() in {"1", "true", "t", "yes", "y", "on"}
