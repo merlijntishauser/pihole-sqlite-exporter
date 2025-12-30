@@ -88,22 +88,18 @@ ruff format .
 SemVer is tracked in `VERSION`.
 
 ```bash
-make bump-patch   # or bump-minor / bump-major
-git add VERSION
-git commit -m "Bump version to $(cat VERSION)"
-make tag
-make push-tag
+make version-bump   # interactive: bumps patch by default, updates VERSION + __init__.py, commits, tags, pushes
 ```
 
 ## Docker release
-```bash
-make docker-build IMAGE_NAME=youruser/pihole-sqlite-exporter
-make docker-tag IMAGE_NAME=youruser/pihole-sqlite-exporter
-make docker-push IMAGE_NAME=youruser/pihole-sqlite-exporter
-```
 For a multi-arch build/push (amd64/arm64):
 ```bash
 make docker-buildx IMAGE_NAME=youruser/pihole-sqlite-exporter
+```
+
+## Docker verification
+```bash
+make docker-verify IMAGE_NAME=youruser/pihole-sqlite-exporter
 ```
 
 ## Notes
