@@ -12,15 +12,10 @@ version:
 
 version-bump:
 	@current=$$(cat $(VERSION_FILE)); \
-	default=$$(python3 - "$$current" <<'PY' || exit 1; \
-import sys; \
-v=sys.argv[1].strip().split("."); \
-if len(v)!=3 or any(not p.isdigit() for p in v): \
-    raise SystemExit(1); \
-major,minor,patch=map(int,v); \
-patch+=1; \
-print(f"{major}.{minor}.{patch}"); \
-PY); \
+	default=$$(python3 -c 'import sys; v=sys.argv[1].strip().split("."); \
+		(len(v)==3 and all(p.isdigit() for p in v)) or sys.exit(1); \
+		major,minor,patch=map(int,v); patch+=1; \
+		print(f"{major}.{minor}.{patch}")' "$$current"); \
 	echo "Current version: $$current"; \
 	read -p "New version [$$default]: " next; \
 	if [ -z "$$next" ]; then next="$$default"; fi; \
