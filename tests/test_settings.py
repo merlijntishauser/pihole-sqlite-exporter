@@ -52,3 +52,13 @@ class TestEnvTruthy:
 
     def test_env_truthy_default_true(self) -> None:
         assert env_truthy("MISSING", "true", env={}) is True
+
+
+class TestVersionSync:
+    def test_init_version_matches_file(self) -> None:
+        from pathlib import Path
+
+        from pihole_sqlite_exporter import __version__
+
+        version_path = Path(__file__).resolve().parents[1] / "VERSION"
+        assert version_path.read_text().strip() == __version__
