@@ -102,6 +102,16 @@ make docker-buildx IMAGE_NAME=youruser/pihole-sqlite-exporter
 make docker-verify IMAGE_NAME=youruser/pihole-sqlite-exporter
 ```
 
+## Docker redeploy (GitHub Actions)
+```bash
+make docker-redeploy
+```
+
+## Move current tag (force)
+```bash
+make tag-move
+```
+
 ## Notes
 - Mount /etc/pihole read-only.
 - domains_being_blocked prefers gravity.db (gravity table). If missing, it falls back to domain_by_id (less precise).

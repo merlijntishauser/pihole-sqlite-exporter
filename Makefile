@@ -5,7 +5,7 @@ IMAGE_TAG ?= $(VERSION)
 DOCKER_IMAGE := $(IMAGE_NAME):$(IMAGE_TAG)
 GIT_COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null)
 
-.PHONY: version version-bump docker-buildx docker-verify
+.PHONY: version version-bump docker-buildx docker-verify docker-redeploy tag-move
 
 version:
 	@echo $(VERSION)
@@ -40,3 +40,16 @@ docker-verify:
 	@docker build -f docker/Dockerfile.alpine --build-arg GIT_COMMIT=$(GIT_COMMIT) -t $(DOCKER_IMAGE) .
 	@docker run --rm -v /var/run/docker.sock:/var/run/docker.sock goodwithtech/dockle:latest $(DOCKER_IMAGE)
 	@docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest image $(DOCKER_IMAGE)
+
+docker-redeploy:
+	@command -v gh >/dev/null 2>&1 || { echo "gh CLI is required"; exit 1; }
+	@gh workflow run docker-release.yml --ref v$(VERSION)
+
+tag-move:
+	@read -p "Move tag v$(VERSION) to current HEAD? This rewrites history. [y/N]: " ans; \
+	if [ "$$ans" != "y" ] && [ "$$ans" != "Y" ]; then \
+		echo "Aborted."; exit 1; \
+	fi; \
+	git tag -f v$(VERSION); \
+	git push origin -f v$(VERSION); \
+	$(MAKE) docker-redeploy
