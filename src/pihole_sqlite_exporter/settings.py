@@ -13,6 +13,7 @@ class Settings:
     scrape_interval: int
     exporter_tz: str
     enable_lifetime_dest_counters: bool
+    lifetime_dest_cache_seconds: int
 
     @classmethod
     def from_env(cls, env: dict[str, str] | None = None) -> "Settings":
@@ -29,6 +30,13 @@ class Settings:
                 raise ValueError(f"{name} must be >= 1 (got {value!r})")
             return parsed
 
+        def _get_nonneg_int(name: str, default: int) -> int:
+            value = _get(name, str(default))
+            parsed = int(value)
+            if parsed < 0:
+                raise ValueError(f"{name} must be >= 0 (got {value!r})")
+            return parsed
+
         listen_port = _get_int("LISTEN_PORT", 9617)
         if listen_port > 65535:
             raise ValueError(f"LISTEN_PORT must be <= 65535 (got {listen_port!r})")
@@ -40,9 +48,10 @@ class Settings:
             listen_port=listen_port,
             hostname_label=_get("HOSTNAME_LABEL", "host.docker.internal"),
             top_n=_get_int("TOP_N", 10),
-            scrape_interval=_get_int("SCRAPE_INTERVAL", 15),
+            scrape_interval=_get_int("SCRAPE_INTERVAL", 60),
             exporter_tz=_get("EXPORTER_TZ", "Europe/Amsterdam"),
             enable_lifetime_dest_counters=env_truthy("ENABLE_LIFETIME_DEST_COUNTERS", "true", env),
+            lifetime_dest_cache_seconds=_get_nonneg_int("LIFETIME_DEST_CACHE_SECONDS", 900),
         )
 
 

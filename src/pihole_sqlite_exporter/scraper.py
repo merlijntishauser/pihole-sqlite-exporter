@@ -39,6 +39,8 @@ logger = logging.getLogger("pihole_sqlite_exporter")
 _SCRAPE_LOCK = threading.Lock()
 _gravity_db_fallback_logged = False
 _gravity_ftl_fallback_logged = False
+_lifetime_dest_cache: dict[str, int] = {}
+_lifetime_dest_cache_ts = 0.0
 
 
 SETTINGS = Settings.from_env()
@@ -101,8 +103,26 @@ def _load_counters(cur: sqlite3.Cursor, host: str) -> tuple[int, int]:
 
 
 def _load_lifetime_destinations(cur: sqlite3.Cursor, blocked_list: str) -> None:
+    global _lifetime_dest_cache, _lifetime_dest_cache_ts
     if not SETTINGS.enable_lifetime_dest_counters:
         metrics.METRICS.set_forward_destinations_lifetime({})
+        _lifetime_dest_cache = {}
+        _lifetime_dest_cache_ts = 0.0
+        return
+
+    cache_seconds = SETTINGS.lifetime_dest_cache_seconds
+    now = time.time()
+    if (
+        cache_seconds > 0
+        and _lifetime_dest_cache
+        and (now - _lifetime_dest_cache_ts) < cache_seconds
+    ):
+        metrics.METRICS.set_forward_destinations_lifetime(_lifetime_dest_cache)
+        logger.debug(
+            "Lifetime destinations cache hit: age=%.0fs labelsets=%d",
+            now - _lifetime_dest_cache_ts,
+            len(_lifetime_dest_cache),
+        )
         return
 
     lifetime = {}
@@ -117,6 +137,8 @@ def _load_lifetime_destinations(cur: sqlite3.Cursor, blocked_list: str) -> None:
     )
 
     metrics.METRICS.set_forward_destinations_lifetime(lifetime)
+    _lifetime_dest_cache = dict(lifetime)
+    _lifetime_dest_cache_ts = now
     logger.debug("Lifetime destinations computed: %d labelsets", len(lifetime))
 
 

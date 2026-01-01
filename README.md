@@ -45,8 +45,9 @@ Exposes, among others:
 | LISTEN_ADDR | 0.0.0.0 | bind address |
 | LISTEN_PORT | 9617 | bind port |
 | TOP_N | 10 | top list size |
-| SCRAPE_INTERVAL | 15 | background scrape interval (seconds) |
+| SCRAPE_INTERVAL | 60 | background scrape interval (seconds) |
 | ENABLE_LIFETIME_DEST_COUNTERS | true | scan full queries table for lifetime destinations |
+| LIFETIME_DEST_CACHE_SECONDS | 900 | cache lifetime destinations (seconds); 0 disables cache |
 | DEBUG | false | enable debug logging |
 | GIT_COMMIT | (unset) | git commit string for startup log (optional) |
 

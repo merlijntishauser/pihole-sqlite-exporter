@@ -92,20 +92,21 @@ def main():
     else:
         logger.info("Exporter version=%s commit=%s", version, commit)
 
-    logger.info(
-        (
-            "Starting exporter (listen=%s:%s, tz=%s, ftl_db=%s, gravity_db=%s, top_n=%s, "
-            "lifetime_dest_counters=%s, scrape_interval=%s)"
-        ),
-        scraper.SETTINGS.listen_addr,
-        scraper.SETTINGS.listen_port,
-        scraper.SETTINGS.exporter_tz,
-        scraper.SETTINGS.ftl_db_path,
-        scraper.SETTINGS.gravity_db_path,
-        scraper.SETTINGS.top_n,
-        scraper.SETTINGS.enable_lifetime_dest_counters,
-        scraper.SETTINGS.scrape_interval,
-    )
+        logger.info(
+            (
+                "Starting exporter (listen=%s:%s, tz=%s, ftl_db=%s, gravity_db=%s, top_n=%s, "
+                "lifetime_dest_counters=%s, lifetime_dest_cache_seconds=%s, scrape_interval=%s)"
+            ),
+            scraper.SETTINGS.listen_addr,
+            scraper.SETTINGS.listen_port,
+            scraper.SETTINGS.exporter_tz,
+            scraper.SETTINGS.ftl_db_path,
+            scraper.SETTINGS.gravity_db_path,
+            scraper.SETTINGS.top_n,
+            scraper.SETTINGS.enable_lifetime_dest_counters,
+            scraper.SETTINGS.lifetime_dest_cache_seconds,
+            scraper.SETTINGS.scrape_interval,
+        )
 
     try:
         scrape_and_update()
