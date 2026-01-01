@@ -11,7 +11,6 @@ from fixtures import (
 from fixtures import (
     update_counters as _update_counters,
 )
-from prometheus_client import generate_latest
 
 from pihole_sqlite_exporter import metrics, scraper
 
@@ -77,14 +76,13 @@ def exporter_config(monkeypatch: pytest.MonkeyPatch, ftl_db: Path, gravity_db: P
     monkeypatch.setattr(scraper.SETTINGS, "top_n", 10)
     monkeypatch.setattr(scraper.SETTINGS, "enable_lifetime_dest_counters", False)
     metrics.METRICS.set_hostname_label("test-host")
-    metrics.METRICS.state.request_rate.reset()
 
 
 @pytest.fixture
 def metrics_text(exporter_config: None) -> str:
     scraper.scrape_and_update()
-    scraper.update_request_rate_for_request()
-    return generate_latest(metrics.METRICS.registry).decode("utf-8")
+    snapshot = metrics.METRICS.get_snapshot()
+    return snapshot.payload.decode("utf-8")
 
 
 @pytest.fixture

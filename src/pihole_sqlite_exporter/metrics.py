@@ -1,7 +1,17 @@
+import threading
+import time
+from dataclasses import dataclass
+
 from prometheus_client import CollectorRegistry, Gauge
 from prometheus_client.core import CounterMetricFamily
 
 from .metrics_state import MetricsState
+
+
+@dataclass(frozen=True)
+class MetricsSnapshot:
+    payload: bytes
+    timestamp: float
 
 
 class Metrics:
@@ -10,6 +20,8 @@ class Metrics:
         self.registry = CollectorRegistry()
         self.state = MetricsState()
         self._forward_destinations_lifetime: dict[str, int] = {}
+        self._snapshot_lock = threading.Lock()
+        self._snapshot = MetricsSnapshot(payload=b"", timestamp=0.0)
 
         metrics_ref = self
 
@@ -31,7 +43,7 @@ class Metrics:
                 yield total_queries_metric
 
                 blocked_queries_metric = CounterMetricFamily(
-                    "pihole_ads_blocked_total",
+                    "pihole_dns_queries_blocked_total",
                     (
                         "Total number of blocked queries (lifetime, monotonic) as reported by "
                         "Pi-hole FTL counters table"
@@ -155,13 +167,6 @@ class Metrics:
             registry=self.registry,
         )
 
-        self.pihole_request_rate = Gauge(
-            "pihole_request_rate",
-            "Represents the number of requests per second",
-            ["hostname"],
-            registry=self.registry,
-        )
-
         self.pihole_scrape_duration_seconds = Gauge(
             "pihole_scrape_duration_seconds",
             "Time spent in scrape_and_update in seconds",
@@ -227,6 +232,16 @@ class Metrics:
 
     def set_forward_destinations_lifetime(self, lifetime: dict[str, int]) -> None:
         self._forward_destinations_lifetime = lifetime
+
+    def update_snapshot(self, payload: bytes, timestamp: float | None = None) -> None:
+        if timestamp is None:
+            timestamp = time.time()
+        with self._snapshot_lock:
+            self._snapshot = MetricsSnapshot(payload=payload, timestamp=timestamp)
+
+    def get_snapshot(self) -> MetricsSnapshot:
+        with self._snapshot_lock:
+            return self._snapshot
 
     def clear_dynamic_series(self) -> None:
         self.pihole_top_ads.clear()

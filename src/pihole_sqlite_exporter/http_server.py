@@ -2,10 +2,10 @@ import logging
 import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
-from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+from prometheus_client import CONTENT_TYPE_LATEST
 
 
-def make_handler(update_request_rate, registry, logger=None):
+def make_handler(get_snapshot, logger=None):
     if logger is None:
         logger = logging.getLogger("pihole_sqlite_exporter")
 
@@ -17,10 +17,23 @@ def make_handler(update_request_rate, registry, logger=None):
                 return
 
             try:
+                client_ip, client_port = self.client_address
+                user_agent = self.headers.get("User-Agent", "-")
+                logger.info(
+                    "Metrics request from %s:%s user_agent=%s", client_ip, client_port, user_agent
+                )
                 logger.debug("HTTP request: %s %s", self.command, self.path)
                 start = time.time()
-                update_request_rate(start)
-                payload = generate_latest(registry)
+                snapshot = get_snapshot()
+                payload = snapshot.payload
+                if not payload:
+                    msg = b"metrics snapshot unavailable\n"
+                    self.send_response(503)
+                    self.send_header("Content-Type", "text/plain; charset=utf-8")
+                    self.send_header("Content-Length", str(len(msg)))
+                    self.end_headers()
+                    self.wfile.write(msg)
+                    return
                 self.send_response(200)
                 self.send_header("Content-Type", CONTENT_TYPE_LATEST)
                 self.send_header("Content-Length", str(len(payload)))

@@ -17,6 +17,7 @@ Prometheus exporter that reads Pi-hole metrics from **pihole-FTL.db** (and optio
 
 ## Metrics
 Exposes, among others:
+- pihole_dns_queries_total / pihole_dns_queries_blocked_total
 - pihole_ads_blocked_today
 - pihole_ads_percentage_today
 - pihole_dns_queries_today / all_types
@@ -25,12 +26,11 @@ Exposes, among others:
 - pihole_forward_destinations (+ response time/variance)
 - pihole_top_ads / top_queries / top_sources
 - pihole_unique_clients / unique_domains
-- pihole_request_rate (per-request delta)
 
 ## How it works
 - A background loop scrapes SQLite on an interval (`SCRAPE_INTERVAL`) and updates the in-memory registry.
-- `/metrics` serves the latest registry values and computes request rate on-demand.
-- Request rate is calculated from the number of new rows since the previous client request. It uses a row cursor (`rowid` or `id`) when available and falls back to counters if no cursor is available.
+- The scrape loop renders a metrics snapshot into memory.
+- `/metrics` serves the latest cached snapshot (no SQLite access in the request path).
 - The exporter logs its version at startup and includes commit when `GIT_COMMIT` is set.
 
 ## Config (env)
@@ -115,7 +115,6 @@ make tag-move
 ## Notes
 - Mount /etc/pihole read-only.
 - domains_being_blocked prefers gravity.db (gravity table). If missing, it falls back to domain_by_id (less precise).
-- If request rate looks lower than the Pi-hole UI, reduce Pi-hole's DB flush interval so SQLite updates more frequently.
 - Disclaimer: AI assistance was used while writing parts of the codebase.
 - Docker image base uses `dhi.io/python:3-alpine3.22` by default (override via `PYTHON_BASE_IMAGE` build arg).
 - Docker Hub releases are automated on `vX.Y.Z` tags (multi-arch: amd64/arm64). Set `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` secrets.

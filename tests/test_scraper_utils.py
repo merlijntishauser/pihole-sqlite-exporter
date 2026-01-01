@@ -25,7 +25,6 @@ def test_scrape_skipped_when_lock_held(
 ) -> None:
     monkeypatch.setattr(scraper.SETTINGS, "hostname_label", "test-host")
     metrics.METRICS.set_hostname_label("test-host")
-    metrics.METRICS.state.request_rate.reset()
 
     scraper._SCRAPE_LOCK.acquire()
     try:

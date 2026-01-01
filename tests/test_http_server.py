@@ -1,10 +1,9 @@
 import io
 
-import pytest
+from pihole_sqlite_exporter import http_server
+from pihole_sqlite_exporter.metrics import MetricsSnapshot
 
-from pihole_sqlite_exporter import http_server, metrics
-
-HandlerCls = http_server.make_handler(lambda *_: None, metrics.METRICS.registry)
+HandlerCls = http_server.make_handler(lambda: MetricsSnapshot(payload=b"ok", timestamp=1.0))
 
 
 class DummyHandler(HandlerCls):
@@ -12,6 +11,8 @@ class DummyHandler(HandlerCls):
         self.path = path
         self.command = "GET"
         self.sent_status = None
+        self.client_address = ("127.0.0.1", 12345)
+        self.headers = {"User-Agent": "pytest"}
         self.wfile = io.BytesIO()
 
     def send_response(self, code, message=None):
@@ -25,10 +26,8 @@ class DummyHandler(HandlerCls):
 
 
 class TestHandler:
-    def test_handler_returns_200_for_metrics(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_handler_returns_200_for_metrics(self) -> None:
         handler = DummyHandler("/metrics")
-
-        monkeypatch.setattr(http_server, "generate_latest", lambda registry: b"ok")
         handler.do_GET()
         assert handler.sent_status == 200
         assert handler.wfile.getvalue() == b"ok"
@@ -38,20 +37,36 @@ class TestHandler:
         handler.do_GET()
         assert handler.sent_status == 404
 
-    def test_handler_returns_500_on_scrape_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        handler = DummyHandler("/metrics")
+    def test_handler_returns_503_on_empty_snapshot(self) -> None:
+        HandlerWithEmpty = http_server.make_handler(
+            lambda: MetricsSnapshot(payload=b"", timestamp=0.0)
+        )
 
-        def _raise(registry):
-            raise RuntimeError("boom")
+        class Handler(HandlerWithEmpty):
+            def __init__(self) -> None:
+                self.path = "/metrics"
+                self.command = "GET"
+                self.sent_status = None
+                self.client_address = ("127.0.0.1", 12345)
+                self.headers = {"User-Agent": "pytest"}
+                self.wfile = io.BytesIO()
 
-        monkeypatch.setattr(http_server, "generate_latest", _raise)
+            def send_response(self, code, message=None):
+                self.sent_status = code
+
+            def send_header(self, key, value):
+                return None
+
+            def end_headers(self):
+                return None
+
+        handler = Handler()
         handler.do_GET()
-        assert handler.sent_status == 500
+        assert handler.sent_status == 503
 
-    def test_handler_returns_500_on_update_failure(self) -> None:
+    def test_handler_returns_500_on_snapshot_failure(self) -> None:
         HandlerWithError = http_server.make_handler(
-            lambda *_: (_ for _ in ()).throw(RuntimeError("update failed")),
-            metrics.METRICS.registry,
+            lambda: (_ for _ in ()).throw(RuntimeError("snapshot failed")),
         )
 
         class Handler(HandlerWithError):
@@ -59,6 +74,8 @@ class TestHandler:
                 self.path = "/metrics"
                 self.command = "GET"
                 self.sent_status = None
+                self.client_address = ("127.0.0.1", 12345)
+                self.headers = {"User-Agent": "pytest"}
                 self.wfile = io.BytesIO()
 
             def send_response(self, code, message=None):

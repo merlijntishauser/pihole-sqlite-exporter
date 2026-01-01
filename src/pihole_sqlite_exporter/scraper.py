@@ -5,6 +5,8 @@ import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
+from prometheus_client import generate_latest
+
 from . import metrics
 from .constants import BLOCKED_STATUSES, QUERY_TYPE_MAP, REPLY_TYPE_MAP
 from .db import fetch_scalar, sqlite_ro
@@ -309,6 +311,10 @@ def scrape_and_update():
         duration = time.perf_counter() - start
         metrics.METRICS.pihole_scrape_duration_seconds.labels(host).set(duration)
         metrics.METRICS.pihole_scrape_success.labels(host).set(success)
+        try:
+            metrics.METRICS.update_snapshot(generate_latest(metrics.METRICS.registry))
+        except Exception:
+            logger.exception("Failed to update metrics snapshot cache")
         logger.info(
             "Scrape completed (host=%s, tz=%s, sod=%s, now=%s) duration=%.3fs success=%s",
             ctx[0],
@@ -318,19 +324,6 @@ def scrape_and_update():
             duration,
             int(success),
         )
-
-
-def update_request_rate_for_request(now: float | None = None) -> None:
-    total, blocked = metrics.METRICS.state.request_rate.update(
-        now=now,
-        db_path=SETTINGS.ftl_db_path,
-        host=SETTINGS.hostname_label,
-        rate_gauge=metrics.METRICS.pihole_request_rate,
-        sqlite_ro=sqlite_ro,
-        logger=logger,
-    )
-    if total is not None and blocked is not None:
-        metrics.METRICS.set_lifetime_totals(total, blocked)
 
 
 def _scrape_loop(

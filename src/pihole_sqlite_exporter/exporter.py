@@ -3,8 +3,6 @@ import logging
 import os
 from pathlib import Path
 
-from prometheus_client import generate_latest as _generate_latest
-
 from . import http_server, metrics, scraper
 from .settings import env_truthy
 
@@ -55,11 +53,7 @@ def parse_args():
 
 
 scrape_and_update = scraper.scrape_and_update
-update_request_rate_for_request = scraper.update_request_rate_for_request
-
-REGISTRY = metrics.METRICS.registry
-Handler = http_server.make_handler(update_request_rate_for_request, REGISTRY, logger)
-generate_latest = _generate_latest
+Handler = http_server.make_handler(metrics.METRICS.get_snapshot, logger)
 
 
 def main():
@@ -95,7 +89,7 @@ def main():
 
     scraper.start_background_scrape()
 
-    handler = http_server.make_handler(update_request_rate_for_request, REGISTRY, logger)
+    handler = http_server.make_handler(metrics.METRICS.get_snapshot, logger)
     http_server.serve(scraper.SETTINGS.listen_addr, scraper.SETTINGS.listen_port, handler)
 
 
