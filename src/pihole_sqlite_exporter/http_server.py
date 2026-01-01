@@ -17,6 +17,15 @@ def make_handler(get_snapshot, get_health, get_ready, logger=None):
                 return
 
             if self.path in ("/healthz", "/readyz"):
+                client_ip, client_port = self.client_address
+                user_agent = self.headers.get("User-Agent", "-")
+                logger.debug(
+                    "Health request from %s:%s user_agent=%s path=%s",
+                    client_ip,
+                    client_port,
+                    user_agent,
+                    self.path,
+                )
                 ok, msg = get_health() if self.path == "/healthz" else get_ready()
                 status = 200 if ok else 503
                 payload = msg.encode()
