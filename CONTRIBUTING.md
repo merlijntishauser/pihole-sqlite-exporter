@@ -30,3 +30,4 @@ Thanks for contributing! This project values XP practices: clear naming, readabl
 - Keep functions small and intention‑revealing.
 - Prefer data‑returning helpers and explicit types when it improves clarity.
 - Update tests with any functional changes, especially around scraping and caching.
+- Remember that Pi-hole controls FTL DB flush cadence via `DBinterval` (default 60s); the exporter reads persisted data.

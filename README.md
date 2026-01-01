@@ -123,6 +123,7 @@ make tag-move
 ## Notes
 - Mount /etc/pihole read-only.
 - domains_being_blocked prefers gravity.db (gravity table). If missing, it falls back to domain_by_id (less precise).
+- Pi-hole controls how often queries are flushed to the FTL database via `DBinterval` (default 60s). This exporter reads whatever is persisted.
 - Disclaimer: AI assistance was used while writing parts of the codebase.
 - Docker image base uses `dhi.io/python:3-alpine3.22` by default (override via `PYTHON_BASE_IMAGE` build arg).
 - Docker Hub releases are automated on `vX.Y.Z` tags (multi-arch: amd64/arm64). Set `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` secrets.
