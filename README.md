@@ -4,7 +4,7 @@ Prometheus exporter that reads Pi-hole metrics from **pihole-FTL.db** (and optio
 
 ## Repository Overview
 <!-- overview:start -->
-- **Docker image:** hardened minimal runtime (non-root by default) with an HTTP healthcheck on `/metrics`.
+- **Docker image:** hardened minimal runtime (non-root by default) with an HTTP healthcheck on `/healthz`.
 - **Docker Hub:** https://hub.docker.com/r/merlijntishauser/pihole-sqlite-exporter
 - **GitHub:** https://github.com/merlijntishauser/pihole-sqlite-exporter
 - **Scan summary (2026-01-01 15:20 UTC):** Dockle: FATAL=2, INFO=2, PASS=14. Trivy: 0 vulnerabilities detected.
@@ -29,8 +29,11 @@ Exposes, among others:
 
 ## How it works
 - A background loop scrapes SQLite on an interval (`SCRAPE_INTERVAL`) and updates the in-memory registry.
+- The exporter performs a warm scrape at startup, then waits one full `SCRAPE_INTERVAL` before the next scheduled scrape.
 - The scrape loop renders a metrics snapshot into memory.
 - `/metrics` serves the latest cached snapshot (no SQLite access in the request path).
+- `/healthz` returns 200 when the last scrape succeeded and the snapshot is fresh.
+- `/readyz` returns 200 after the first successful scrape.
 - The exporter logs its version at startup and includes commit when `GIT_COMMIT` is set.
 
 ## Config (env)
@@ -67,6 +70,11 @@ To include the commit in startup logs, set `GIT_COMMIT` before building (for exa
 ## Test
 ```bash
 wget -qO- http://127.0.0.1:9617/metrics
+```
+Health endpoints:
+```bash
+wget -qO- http://127.0.0.1:9617/healthz
+wget -qO- http://127.0.0.1:9617/readyz
 ```
 
 ## Coverage

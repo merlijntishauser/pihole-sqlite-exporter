@@ -12,7 +12,6 @@ Project context
 - Tests are split into logical modules under tests/.
 - SQL queries live in src/pihole_sqlite_exporter/queries.py.
 - Metrics gauges and collectors are defined in src/pihole_sqlite_exporter/metrics.py.
-- Request rate tracking lives in src/pihole_sqlite_exporter/request_rate.py.
 - Constants (blocked statuses, query/reply maps) live in src/pihole_sqlite_exporter/constants.py.
 
 Workflow preferences
@@ -22,7 +21,7 @@ Workflow preferences
 - Prefer clear, minimal comments only when code is non-obvious.
 
 Refactor expectations
-- Use scraper.py, http_server.py, metrics.py, db.py, and request_rate.py modules in src/pihole_sqlite_exporter.
+- Use scraper.py, http_server.py, metrics.py, and db.py modules in src/pihole_sqlite_exporter.
 - Background scrape loop is in scraper._scrape_loop and should be testable (injectable time/sleep).
 - Avoid hardcoding Python versioned paths; keep dependencies under /app/vendor in Docker.
 
