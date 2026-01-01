@@ -21,7 +21,7 @@ class TestExporterMain:
         monkeypatch.setattr(
             exporter.scraper,
             "start_background_scrape",
-            lambda: called.setdefault("background", True),
+            lambda **_: called.setdefault("background", True),
         )
         monkeypatch.setattr(
             exporter.http_server,
@@ -53,7 +53,7 @@ class TestExporterMain:
         monkeypatch.setattr(
             exporter.scraper,
             "start_background_scrape",
-            lambda: called.setdefault("background", True),
+            lambda **_: called.setdefault("background", True),
         )
         monkeypatch.setattr(
             exporter.http_server,

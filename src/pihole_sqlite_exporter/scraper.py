@@ -342,8 +342,11 @@ def _scrape_loop(
     stop_event: threading.Event | None = None,
     sleep_fn=time.sleep,
     time_fn=time.time,
+    initial_delay: float = 0.0,
 ) -> None:
     interval = max(1, SETTINGS.scrape_interval)
+    if initial_delay > 0:
+        sleep_fn(initial_delay)
     while True:
         if stop_event is not None and stop_event.is_set():
             return
@@ -356,7 +359,11 @@ def _scrape_loop(
         sleep_fn(max(1.0, interval - elapsed))
 
 
-def start_background_scrape() -> threading.Thread:
-    thread = threading.Thread(target=_scrape_loop, daemon=True)
+def start_background_scrape(initial_delay: float = 0.0) -> threading.Thread:
+    thread = threading.Thread(
+        target=_scrape_loop,
+        kwargs={"initial_delay": initial_delay},
+        daemon=True,
+    )
     thread.start()
     return thread

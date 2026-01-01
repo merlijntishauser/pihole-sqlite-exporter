@@ -112,7 +112,7 @@ def main():
     except Exception:
         logger.exception("Initial scrape failed")
 
-    scraper.start_background_scrape()
+    scraper.start_background_scrape(initial_delay=scraper.SETTINGS.scrape_interval)
 
     handler = http_server.make_handler(
         metrics.METRICS.get_snapshot,
