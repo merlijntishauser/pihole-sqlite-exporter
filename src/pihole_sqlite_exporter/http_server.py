@@ -30,7 +30,7 @@ def make_handler(get_snapshot, get_health, get_ready, logger=None):
             try:
                 client_ip, client_port = self.client_address
                 user_agent = self.headers.get("User-Agent", "-")
-                logger.info(
+                logger.debug(
                     "Metrics request from %s:%s user_agent=%s", client_ip, client_port, user_agent
                 )
                 logger.debug("HTTP request: %s %s", self.command, self.path)

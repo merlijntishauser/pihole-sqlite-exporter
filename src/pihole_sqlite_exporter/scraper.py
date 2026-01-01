@@ -37,6 +37,8 @@ from .settings import Settings
 
 logger = logging.getLogger("pihole_sqlite_exporter")
 _SCRAPE_LOCK = threading.Lock()
+_gravity_db_fallback_logged = False
+_gravity_ftl_fallback_logged = False
 
 
 SETTINGS = Settings.from_env()
@@ -229,13 +231,16 @@ def _load_top_lists(
 
 
 def _load_domains_blocked(host: str) -> None:
+    global _gravity_db_fallback_logged, _gravity_ftl_fallback_logged
     domains_value = None
     try:
         with sqlite_ro(SETTINGS.gravity_db_path) as gconn:
             gcur = gconn.cursor()
             domains_value = int(fetch_scalar(gcur, SQL_GRAVITY_COUNT))
     except Exception as e:
-        logger.info("Gravity DB unavailable; falling back (reason: %s)", e)
+        if not _gravity_db_fallback_logged:
+            logger.info("Gravity DB unavailable; falling back (reason: %s)", e)
+            _gravity_db_fallback_logged = True
         domains_value = None
 
     if domains_value is None:
@@ -243,7 +248,9 @@ def _load_domains_blocked(host: str) -> None:
             with sqlite_ro(SETTINGS.ftl_db_path) as conn:
                 cur = conn.cursor()
                 domains_value = int(fetch_scalar(cur, SQL_DOMAIN_BY_ID_COUNT))
-                logger.info("Gravity DB fallback: using FTL domain count")
+                if not _gravity_ftl_fallback_logged:
+                    logger.info("Gravity DB fallback: using FTL domain count")
+                    _gravity_ftl_fallback_logged = True
         except Exception as e:
             logger.warning("Fallback domain count failed: %s", e)
             domains_value = 0
@@ -320,7 +327,7 @@ def scrape_and_update():
             )
         except Exception:
             logger.exception("Failed to update metrics snapshot cache")
-        logger.info(
+        logger.debug(
             "Scrape completed (host=%s, tz=%s, sod=%s, now=%s) duration=%.3fs success=%s",
             ctx[0],
             ctx[1],
@@ -344,7 +351,7 @@ def _scrape_loop(
         try:
             scrape_and_update()
         except Exception:
-            logger.exception("Background scrape failed")
+            logger.warning("Background scrape failed")
         elapsed = time_fn() - start
         sleep_fn(max(1.0, interval - elapsed))
 
