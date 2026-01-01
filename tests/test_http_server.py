@@ -3,7 +3,20 @@ import io
 from pihole_sqlite_exporter import http_server
 from pihole_sqlite_exporter.metrics import MetricsSnapshot
 
-HandlerCls = http_server.make_handler(lambda: MetricsSnapshot(payload=b"ok", timestamp=1.0))
+
+def _health_ok() -> tuple[bool, str]:
+    return True, "ok\n"
+
+
+def _ready_ok() -> tuple[bool, str]:
+    return True, "ready\n"
+
+
+HandlerCls = http_server.make_handler(
+    lambda: MetricsSnapshot(payload=b"ok", timestamp=1.0),
+    _health_ok,
+    _ready_ok,
+)
 
 
 class DummyHandler(HandlerCls):
@@ -32,6 +45,18 @@ class TestHandler:
         assert handler.sent_status == 200
         assert handler.wfile.getvalue() == b"ok"
 
+    def test_handler_returns_200_for_healthz(self) -> None:
+        handler = DummyHandler("/healthz")
+        handler.do_GET()
+        assert handler.sent_status == 200
+        assert handler.wfile.getvalue() == b"ok\n"
+
+    def test_handler_returns_200_for_readyz(self) -> None:
+        handler = DummyHandler("/readyz")
+        handler.do_GET()
+        assert handler.sent_status == 200
+        assert handler.wfile.getvalue() == b"ready\n"
+
     def test_handler_returns_404_for_unknown_path(self) -> None:
         handler = DummyHandler("/nope")
         handler.do_GET()
@@ -39,7 +64,9 @@ class TestHandler:
 
     def test_handler_returns_503_on_empty_snapshot(self) -> None:
         HandlerWithEmpty = http_server.make_handler(
-            lambda: MetricsSnapshot(payload=b"", timestamp=0.0)
+            lambda: MetricsSnapshot(payload=b"", timestamp=0.0),
+            _health_ok,
+            _ready_ok,
         )
 
         class Handler(HandlerWithEmpty):
@@ -67,6 +94,8 @@ class TestHandler:
     def test_handler_returns_500_on_snapshot_failure(self) -> None:
         HandlerWithError = http_server.make_handler(
             lambda: (_ for _ in ()).throw(RuntimeError("snapshot failed")),
+            _health_ok,
+            _ready_ok,
         )
 
         class Handler(HandlerWithError):

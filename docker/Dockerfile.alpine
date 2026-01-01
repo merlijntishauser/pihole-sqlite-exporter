@@ -20,6 +20,6 @@ ENV PATH=/home/nonroot/.local/bin:$PATH
 
 EXPOSE 9617
 
-HEALTHCHECK --interval=30s --timeout=5s --retries=3 CMD ["python3", "-c", "import os,sys,urllib.request; port=os.getenv('LISTEN_PORT','9617'); url=f'http://127.0.0.1:{port}/metrics';\n\ntry:\n    with urllib.request.urlopen(url, timeout=3) as r:\n        sys.exit(0 if r.status == 200 else 1)\nexcept Exception:\n    sys.exit(1)\n"]
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 CMD ["python3", "-c", "import os,sys,urllib.request; port=os.getenv('LISTEN_PORT','9617'); url=f'http://127.0.0.1:{port}/healthz';\n\ntry:\n    with urllib.request.urlopen(url, timeout=3) as r:\n        sys.exit(0 if r.status == 200 else 1)\nexcept Exception:\n    sys.exit(1)\n"]
 
 CMD ["python3", "-m", "pihole_sqlite_exporter.exporter"]

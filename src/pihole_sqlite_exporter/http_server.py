@@ -5,15 +5,26 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from prometheus_client import CONTENT_TYPE_LATEST
 
 
-def make_handler(get_snapshot, logger=None):
+def make_handler(get_snapshot, get_health, get_ready, logger=None):
     if logger is None:
         logger = logging.getLogger("pihole_sqlite_exporter")
 
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):
-            if self.path not in ("/metrics", "/"):
+            if self.path not in ("/metrics", "/", "/healthz", "/readyz"):
                 self.send_response(404)
                 self.end_headers()
+                return
+
+            if self.path in ("/healthz", "/readyz"):
+                ok, msg = get_health() if self.path == "/healthz" else get_ready()
+                status = 200 if ok else 503
+                payload = msg.encode()
+                self.send_response(status)
+                self.send_header("Content-Type", "text/plain; charset=utf-8")
+                self.send_header("Content-Length", str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
                 return
 
             try:

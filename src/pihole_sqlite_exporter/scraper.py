@@ -309,10 +309,15 @@ def scrape_and_update():
     finally:
         _SCRAPE_LOCK.release()
         duration = time.perf_counter() - start
+        scrape_timestamp = time.time()
         metrics.METRICS.pihole_scrape_duration_seconds.labels(host).set(duration)
         metrics.METRICS.pihole_scrape_success.labels(host).set(success)
+        metrics.METRICS.record_scrape_result(success == 1.0, timestamp=scrape_timestamp)
         try:
-            metrics.METRICS.update_snapshot(generate_latest(metrics.METRICS.registry))
+            metrics.METRICS.update_snapshot(
+                generate_latest(metrics.METRICS.registry),
+                timestamp=scrape_timestamp,
+            )
         except Exception:
             logger.exception("Failed to update metrics snapshot cache")
         logger.info(

@@ -1,6 +1,7 @@
 import argparse
 import logging
 import os
+import time
 from pathlib import Path
 
 from . import http_server, metrics, scraper
@@ -52,8 +53,32 @@ def parse_args():
     return parser.parse_args()
 
 
+def _health_status() -> tuple[bool, str]:
+    snapshot = metrics.METRICS.get_snapshot()
+    last_success, _last_scrape_ts, _last_success_ts = metrics.METRICS.get_scrape_status()
+    max_age_seconds = max(1, scraper.SETTINGS.scrape_interval) * 2
+    snapshot_age = time.time() - snapshot.timestamp if snapshot.timestamp > 0 else float("inf")
+    if last_success != 1:
+        return False, "last scrape failed\n"
+    if snapshot_age > max_age_seconds:
+        return False, f"snapshot too old: {snapshot_age:.0f}s\n"
+    return True, "ok\n"
+
+
+def _ready_status() -> tuple[bool, str]:
+    _last_success, _last_scrape_ts, last_success_ts = metrics.METRICS.get_scrape_status()
+    if last_success_ts <= 0:
+        return False, "waiting for first successful scrape\n"
+    return True, "ready\n"
+
+
 scrape_and_update = scraper.scrape_and_update
-Handler = http_server.make_handler(metrics.METRICS.get_snapshot, logger)
+Handler = http_server.make_handler(
+    metrics.METRICS.get_snapshot,
+    _health_status,
+    _ready_status,
+    logger,
+)
 
 
 def main():
@@ -89,7 +114,12 @@ def main():
 
     scraper.start_background_scrape()
 
-    handler = http_server.make_handler(metrics.METRICS.get_snapshot, logger)
+    handler = http_server.make_handler(
+        metrics.METRICS.get_snapshot,
+        _health_status,
+        _ready_status,
+        logger,
+    )
     http_server.serve(scraper.SETTINGS.listen_addr, scraper.SETTINGS.listen_port, handler)
 
 

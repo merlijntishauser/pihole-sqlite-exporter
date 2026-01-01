@@ -22,6 +22,10 @@ class Metrics:
         self._forward_destinations_lifetime: dict[str, int] = {}
         self._snapshot_lock = threading.Lock()
         self._snapshot = MetricsSnapshot(payload=b"", timestamp=0.0)
+        self._scrape_status_lock = threading.Lock()
+        self._last_scrape_success = 0
+        self._last_scrape_timestamp = 0.0
+        self._last_successful_scrape_timestamp = 0.0
 
         metrics_ref = self
 
@@ -242,6 +246,23 @@ class Metrics:
     def get_snapshot(self) -> MetricsSnapshot:
         with self._snapshot_lock:
             return self._snapshot
+
+    def record_scrape_result(self, success: bool, timestamp: float | None = None) -> None:
+        if timestamp is None:
+            timestamp = time.time()
+        with self._scrape_status_lock:
+            self._last_scrape_success = 1 if success else 0
+            self._last_scrape_timestamp = timestamp
+            if success:
+                self._last_successful_scrape_timestamp = timestamp
+
+    def get_scrape_status(self) -> tuple[int, float, float]:
+        with self._scrape_status_lock:
+            return (
+                self._last_scrape_success,
+                self._last_scrape_timestamp,
+                self._last_successful_scrape_timestamp,
+            )
 
     def clear_dynamic_series(self) -> None:
         self.pihole_top_ads.clear()
