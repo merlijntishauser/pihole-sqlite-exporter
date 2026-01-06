@@ -5,7 +5,25 @@ IMAGE_TAG ?= $(VERSION)
 DOCKER_IMAGE := $(IMAGE_NAME):$(IMAGE_TAG)
 GIT_COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null)
 
-.PHONY: version version-bump docker-buildx docker-verify docker-redeploy tag-move
+.PHONY: venv install lint format test coverage version version-bump docker-buildx docker-verify docker-redeploy tag-move
+
+venv:
+	python -m venv .venv
+
+install:
+	.venv/bin/pip install -r requirements.txt -r requirements-dev.txt
+
+lint:
+	.venv/bin/ruff check .
+
+format:
+	.venv/bin/ruff format .
+
+test:
+	.venv/bin/pytest
+
+coverage:
+	.venv/bin/pytest --cov=pihole_sqlite_exporter --cov-report=term-missing
 
 version:
 	@echo $(VERSION)
