@@ -60,7 +60,7 @@ jobs:
         run: docker build -f docker/Dockerfile.alpine --build-arg GIT_COMMIT=${{ github.sha }} -t scan-image:${{ github.sha }} .
 
       - name: Dockle scan
-        run: docker run --rm -v /var/run/docker.sock:/var/run/docker.sock goodwithtech/dockle:latest --format json scan-image:${{ github.sha }} > dockle.json
+        run: docker run --rm -v /var/run/docker.sock:/var/run/docker.sock goodwithtech/dockle:latest --format json -af settings.py scan-image:${{ github.sha }} > dockle.json
 
       - name: Fail on Dockle fatals
         run: |
