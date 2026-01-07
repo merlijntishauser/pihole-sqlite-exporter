@@ -2,7 +2,7 @@ ARG PYTHON_BASE_IMAGE=dhi.io/python:3-alpine3.22
 ARG GIT_COMMIT=unknown
 FROM ${PYTHON_BASE_IMAGE}
 
-ENV GIT_COMMIT=${GIT_COMMIT}
+LABEL org.opencontainers.image.revision=${GIT_COMMIT}
 
 WORKDIR /app
 
