@@ -114,6 +114,33 @@ jobs:
               print(f"- {code}: {title}".rstrip())
               if desc:
                 print(f"  {desc}")
+              for key in (
+                "Message",
+                "Detail",
+                "Details",
+                "File",
+                "FilePath",
+                "Filename",
+                "Path",
+                "Reference",
+                "Resource",
+                "Target",
+                "Cmd",
+                "Instruction",
+              ):
+                value = item.get(key) or item.get(key.lower())
+                if value:
+                  print(f"  {key}: {value}")
+              extra = {k: v for k, v in item.items() if k not in {
+                "Level", "level", "Code", "code", "Title", "title",
+                "Description", "description", "Message", "message",
+                "Detail", "detail", "Details", "details", "File", "file",
+                "FilePath", "filepath", "Filename", "filename", "Path", "path",
+                "Reference", "reference", "Resource", "resource", "Target",
+                "target", "Cmd", "cmd", "Instruction", "instruction",
+              }}
+              if extra:
+                print(f"  Extra: {extra}")
             sys.exit(1)
           print("Dockle fatal findings: 0")
           PY
