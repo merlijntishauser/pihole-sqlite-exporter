@@ -1,4 +1,5 @@
 # pihole-sqlite-exporter
+[![CI](https://github.com/merlijntishauser/pihole-sqlite-exporter/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/merlijntishauser/pihole-sqlite-exporter/actions/workflows/ci.yml) [![Docker Release](https://github.com/merlijntishauser/pihole-sqlite-exporter/actions/workflows/docker-release.yml/badge.svg?branch=main)](https://github.com/merlijntishauser/pihole-sqlite-exporter/actions/workflows/docker-release.yml) [![CodeQL](https://github.com/merlijntishauser/pihole-sqlite-exporter/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/merlijntishauser/pihole-sqlite-exporter/actions/workflows/codeql.yml)
 
 Prometheus exporter that reads Pi-hole metrics from **pihole-FTL.db** (and optionally **gravity.db**) without using the Pi-hole API.
 
