@@ -1,9 +1,14 @@
 # Changelog
 
+## 0.3.6 (unreleased)
+- Consolidated exporter tests into a single module.
+- Refined changelog wording and ensured dated entries.
+
 ## 0.3.5 (2026-01-08)
 - Added Dockle FATAL gating with detailed scan output and a scan-only workflow option.
 - Fixed Dockle CIS-DI-0010 by moving commit info to an OCI label and suppressing the settings.py false positive.
 - Added CodeQL advanced workflow v4, tightened workflow permissions, and improved CI visibility.
+- Refined Pyright typing for fetch_scalar overloads.
 - Added Pyright type checking and cyclomatic complexity linting; run CI tooling from `.venv` and added `make typecheck`.
 - Refactored HTTP handler flow, exporter startup logging, and conditional style; updated AGENTS.md rules.
 - Consolidated scraper tests and added module-focused tests for metrics, metrics_state, and queries.

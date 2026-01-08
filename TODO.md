@@ -3,7 +3,7 @@
 ## Short-term (next)
 
 - Make `ENABLE_LIFETIME_DEST_COUNTERS` a runtime toggle in logs and metrics (emit when disabled) to explain missing series.
-- Consolidate log context (hostname, tz, sod, now) into a helper so scrape logs stay consistent and easy to search.
+- Consolidate exporter-related tests into a single module (merge `test_exporter_main.py` and `test_health_ready.py`).
 
 ## Medium-term
 
@@ -13,4 +13,3 @@
 
 ## Later
 
-- Consider a scrape-skipped counter metric to quantify contention between HTTP requests and background scrape loop.
