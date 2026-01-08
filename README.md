@@ -98,47 +98,15 @@ wget -qO- http://127.0.0.1:9617/healthz
 wget -qO- http://127.0.0.1:9617/readyz
 ```
 
-## Coverage
-```bash
-pytest --cov=src --cov-report=term-missing
-```
 
-## Lint
-```bash
-ruff check .
-```
 
-## Format
-```bash
-ruff format .
-```
 
-## Versioning
-SemVer is tracked in `VERSION`.
 
-```bash
-make version-bump   # interactive: bumps patch by default, updates VERSION + __init__.py, commits, tags, pushes
-```
 
 ## Docker release
 For a multi-arch build/push (amd64/arm64):
 ```bash
 make docker-buildx IMAGE_NAME=youruser/pihole-sqlite-exporter
-```
-
-## Docker verification
-```bash
-make docker-verify IMAGE_NAME=youruser/pihole-sqlite-exporter
-```
-
-## Docker redeploy (GitHub Actions)
-```bash
-make docker-redeploy
-```
-
-## Move current tag (force)
-```bash
-make tag-move
 ```
 
 ## Notes
@@ -150,3 +118,7 @@ make tag-move
 - Docker Hub releases are automated on `vX.Y.Z` tags (multi-arch: amd64/arm64). Set `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` secrets.
 - GitHub Actions also needs `DHI_USERNAME` and `DHI_TOKEN` to pull the base image from `dhi.io`.
 - If you hit `sqlite3.OperationalError: unable to open database file`, it is usually a volume path or permissions issue. On NAS systems you may need to run the container as root (`user: "0:0"`) or adjust the host file ownership/permissions so the container user can read `/etc/pihole/pihole-FTL.db`.
+
+## I really fancy coffee! and stars! and... oh wait... 
+
+<script type="text/javascript" src="https://cdnjs.buymeacoffee.com/1.0.0/button.prod.min.js" data-name="bmc-button" data-slug="merlijntishauser" data-color="#FFDD00" data-emoji=""  data-font="Cookie" data-text="Buy me a coffee" data-outline-color="#000000" data-font-color="#000000" data-coffee-color="#ffffff" ></script>
