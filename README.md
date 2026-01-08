@@ -121,6 +121,4 @@ make docker-buildx IMAGE_NAME=youruser/pihole-sqlite-exporter
 
 ## I really fancy coffee! and stars! and... oh wait... 
 
-## I really fancy coffee! and stars! and... oh wait...
-
 [![Buy me a coffee](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://www.buymeacoffee.com/merlijntishauser)
