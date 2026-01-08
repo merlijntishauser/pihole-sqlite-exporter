@@ -149,4 +149,6 @@ jobs:
 
       - name: Cleanup Pi-hole container
         if: always()
-        run: docker rm -f pihole
+        run: |
+          docker rm -f pihole
+          rm -f .ci-pihole-FTL.db .ci-pihole-FTL.db-shm .ci-pihole-FTL.db-wal .ci-gravity.db

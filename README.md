@@ -108,10 +108,11 @@ wget -qO- http://127.0.0.1:9617/healthz
 wget -qO- http://127.0.0.1:9617/readyz
 ```
 
-
-
-
-
+## Contract test (Pi-hole)
+Runs the Docker-backed contract test locally using `pihole/pihole:latest`:
+```bash
+make contract
+```
 
 ## Docker release
 For a multi-arch build/push (amd64/arm64):
