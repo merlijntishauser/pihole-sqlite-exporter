@@ -117,7 +117,7 @@ jobs:
     needs: build-scan
     if: ${{ github.event_name != 'workflow_dispatch' || inputs.scan_only != 'true' }}
     permissions:
-      contents: read
+      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -168,7 +168,7 @@ jobs:
     needs: build-push
     if: ${{ github.event_name != 'workflow_dispatch' || inputs.scan_only != 'true' }}
     permissions:
-      contents: read
+      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v6
