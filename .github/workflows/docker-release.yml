@@ -137,8 +137,8 @@ jobs:
           images: merlijntishauser/pihole-sqlite-exporter
           tags: |
             type=semver,pattern={{version}}
-          flavor: |
-            latest=true
+            type=sha,format=short
+            type=raw,value=latest
 
       - name: Build and push
         uses: docker/build-push-action@v6
