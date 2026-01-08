@@ -7,10 +7,10 @@ LABEL org.opencontainers.image.revision=${GIT_COMMIT}
 
 WORKDIR /app
 
-USER root
+USER 0
 RUN apk add --no-cache --upgrade zlib \
     && rm -f /usr/bin/untgz /usr/bin/minigzip
-USER nonroot
+USER 65532
 
 COPY VERSION /app/VERSION
 COPY requirements.txt /app/requirements.txt
