@@ -1,6 +1,6 @@
 import logging
 import sqlite3
-from typing import TypeVar
+from typing import TypeVar, overload
 from urllib.parse import quote
 
 logger = logging.getLogger("pihole_sqlite_exporter")
@@ -15,10 +15,29 @@ def sqlite_ro(db_path: str) -> sqlite3.Connection:
     return sqlite3.connect(dsn, uri=True)
 
 
-def fetch_scalar(cur: sqlite3.Cursor, sql: str, params=(), default: T | None = None) -> T | None:
+@overload
+def fetch_scalar(cur: sqlite3.Cursor, sql: str, params: tuple = ()) -> None: ...
+
+
+@overload
+def fetch_scalar(
+    cur: sqlite3.Cursor,
+    sql: str,
+    params: tuple = (),
+    *,
+    default: None = None,
+) -> None: ...
+
+
+@overload
+def fetch_scalar(cur: sqlite3.Cursor, sql: str, params: tuple = (), *, default: T) -> T: ...
+
+
+def fetch_scalar(
+    cur: sqlite3.Cursor, sql: str, params: tuple = (), default: T | None = None
+) -> T | None:
     cur.execute(sql, params)
     row = cur.fetchone()
-    value = default
     if row:
-        value = row[0]
-    return value
+        return row[0]
+    return default

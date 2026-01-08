@@ -21,14 +21,18 @@ jobs:
 
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install -r requirements.txt -r requirements-dev.txt
+          python -m venv .venv
+          .venv/bin/python -m pip install --upgrade pip
+          .venv/bin/python -m pip install -r requirements.txt -r requirements-dev.txt
 
       - name: Ruff lint
-        run: ruff check .
+        run: .venv/bin/ruff check .
 
       - name: Ruff format
-        run: ruff format --check .
+        run: .venv/bin/ruff format --check .
+
+      - name: Pyright
+        run: .venv/bin/pyright
 
       - name: Pytest
-        run: pytest --cov=src --cov-report=term-missing
+        run: .venv/bin/pytest --cov=src --cov-report=term-missing

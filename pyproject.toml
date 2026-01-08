@@ -3,7 +3,18 @@ line-length = 100
 target-version = "py311"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP"]
+select = ["C90", "E", "F", "I", "UP"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
 
 [tool.ruff.format]
 line-ending = "lf"
+
+[tool.pyright]
+typeCheckingMode = "basic"
+include = ["src"]
+reportMissingTypeStubs = false
+reportMissingImports = true
+venvPath = "."
+venv = ".venv"

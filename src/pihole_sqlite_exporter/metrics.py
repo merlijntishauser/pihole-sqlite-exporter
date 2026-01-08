@@ -1,9 +1,12 @@
 import threading
 import time
+from collections.abc import Iterable
 from dataclasses import dataclass
 
 from prometheus_client import CollectorRegistry, Gauge
 from prometheus_client.core import CounterMetricFamily
+from prometheus_client.metrics_core import Metric
+from prometheus_client.registry import Collector
 
 from .metrics_state import MetricsState
 
@@ -29,8 +32,8 @@ class Metrics:
 
         metrics_ref = self
 
-        class PiholeTotalsCollector:
-            def collect(inner_self):
+        class PiholeTotalsCollector(Collector):
+            def collect(self) -> Iterable[Metric]:
                 host = metrics_ref.hostname_label
 
                 total_queries_metric = CounterMetricFamily(
@@ -59,8 +62,8 @@ class Metrics:
                 )
                 yield blocked_queries_metric
 
-        class PiholeDestTotalsCollector:
-            def collect(inner_self):
+        class PiholeDestTotalsCollector(Collector):
+            def collect(self) -> Iterable[Metric]:
                 host = metrics_ref.hostname_label
                 forward_destinations_metric = CounterMetricFamily(
                     "pihole_forward_destinations_total",

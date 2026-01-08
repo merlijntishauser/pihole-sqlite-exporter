@@ -1,4 +1,5 @@
 import os
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 
@@ -16,12 +17,13 @@ class Settings:
     lifetime_dest_cache_seconds: int
 
     @classmethod
-    def from_env(cls, env: dict[str, str] | None = None) -> "Settings":
-        if env is None:
-            env = os.environ
+    def from_env(cls, env: Mapping[str, str] | None = None) -> "Settings":
+        environment = os.environ
+        if env is not None:
+            environment = env
 
         def _get(name: str, default: str) -> str:
-            return env.get(name, default)
+            return environment.get(name, default)
 
         def _get_int(name: str, default: int) -> int:
             value = _get(name, str(default))
@@ -50,13 +52,18 @@ class Settings:
             top_n=_get_int("TOP_N", 10),
             scrape_interval=_get_int("SCRAPE_INTERVAL", 60),
             exporter_tz=_get("EXPORTER_TZ", "Europe/Amsterdam"),
-            enable_lifetime_dest_counters=env_truthy("ENABLE_LIFETIME_DEST_COUNTERS", "true", env),
+            enable_lifetime_dest_counters=env_truthy(
+                "ENABLE_LIFETIME_DEST_COUNTERS",
+                "true",
+                environment,
+            ),
             lifetime_dest_cache_seconds=_get_nonneg_int("LIFETIME_DEST_CACHE_SECONDS", 900),
         )
 
 
-def env_truthy(name: str, default: str = "false", env: dict[str, str] | None = None) -> bool:
-    if env is None:
-        env = os.environ
-    value = env.get(name, default)
+def env_truthy(name: str, default: str = "false", env: Mapping[str, str] | None = None) -> bool:
+    environment = os.environ
+    if env is not None:
+        environment = env
+    value = environment.get(name, default)
     return str(value).strip().lower() in {"1", "true", "t", "yes", "y", "on"}

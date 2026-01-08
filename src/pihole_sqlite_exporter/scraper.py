@@ -89,9 +89,8 @@ def _log_context(host: str, sod: int, now: int) -> tuple[str, str, int, int]:
 def _load_counters(cur: sqlite3.Cursor, host: str) -> tuple[int, int]:
     metrics.METRICS.pihole_status.labels(host).set(1)
 
-    total_queries_lifetime = int(fetch_scalar(cur, SQL_COUNTER_TOTAL))
-
-    blocked_queries_lifetime = int(fetch_scalar(cur, SQL_COUNTER_BLOCKED))
+    total_queries_lifetime = int(fetch_scalar(cur, SQL_COUNTER_TOTAL, default=0))
+    blocked_queries_lifetime = int(fetch_scalar(cur, SQL_COUNTER_BLOCKED, default=0))
 
     metrics.METRICS.set_lifetime_totals(total_queries_lifetime, blocked_queries_lifetime)
     logger.debug(
@@ -130,11 +129,14 @@ def _load_lifetime_destinations(cur: sqlite3.Cursor, blocked_list: str) -> None:
     for fwd, cnt in cur.fetchall():
         lifetime[str(fwd)] = int(cnt)
 
-    lifetime["cache"] = int(fetch_scalar(cur, SQL_LIFETIME_CACHE))
+    lifetime["cache"] = int(fetch_scalar(cur, SQL_LIFETIME_CACHE, default=0))
 
-    lifetime["blocklist"] = int(
-        fetch_scalar(cur, SQL_LIFETIME_BLOCKED.format(blocked_list=blocked_list))
+    blocklist_value = fetch_scalar(
+        cur,
+        SQL_LIFETIME_BLOCKED.format(blocked_list=blocked_list),
+        default=0,
     )
+    lifetime["blocklist"] = int(blocklist_value)
 
     metrics.METRICS.set_forward_destinations_lifetime(lifetime)
     _lifetime_dest_cache = dict(lifetime)
@@ -143,14 +145,20 @@ def _load_lifetime_destinations(cur: sqlite3.Cursor, blocked_list: str) -> None:
 
 
 def _load_clients_ever_seen(cur: sqlite3.Cursor, host: str) -> None:
-    clients_seen = float(fetch_scalar(cur, SQL_CLIENTS_EVER_SEEN))
+    clients_seen = float(fetch_scalar(cur, SQL_CLIENTS_EVER_SEEN, default=0))
     metrics.METRICS.pihole_clients_ever_seen.labels(host).set(clients_seen)
 
 
 def _load_queries_today(cur: sqlite3.Cursor, host: str, sod: int, blocked_list: str) -> None:
-    q_today = int(fetch_scalar(cur, SQL_QUERIES_TODAY, (sod,)))
+    q_today = int(fetch_scalar(cur, SQL_QUERIES_TODAY, (sod,), default=0))
 
-    b_today = int(fetch_scalar(cur, SQL_BLOCKED_TODAY.format(blocked_list=blocked_list), (sod,)))
+    blocked_value = fetch_scalar(
+        cur,
+        SQL_BLOCKED_TODAY.format(blocked_list=blocked_list),
+        (sod,),
+        default=0,
+    )
+    b_today = int(blocked_value)
 
     metrics.METRICS.pihole_dns_queries_today.labels(host).set(float(q_today))
     metrics.METRICS.pihole_dns_queries_all_types.labels(host).set(float(q_today))
@@ -162,10 +170,10 @@ def _load_queries_today(cur: sqlite3.Cursor, host: str, sod: int, blocked_list: 
 
 
 def _load_unique_counts(cur: sqlite3.Cursor, host: str, now: int) -> None:
-    unique_clients = float(fetch_scalar(cur, SQL_UNIQUE_CLIENTS, (now - 86400,)))
+    unique_clients = float(fetch_scalar(cur, SQL_UNIQUE_CLIENTS, (now - 86400,), default=0))
     metrics.METRICS.pihole_unique_clients.labels(host).set(unique_clients)
 
-    unique_domains = float(fetch_scalar(cur, SQL_UNIQUE_DOMAINS, (now - 86400,)))
+    unique_domains = float(fetch_scalar(cur, SQL_UNIQUE_DOMAINS, (now - 86400,), default=0))
     metrics.METRICS.pihole_unique_domains.labels(host).set(unique_domains)
 
 
@@ -190,9 +198,8 @@ def _load_reply_types(cur: sqlite3.Cursor, host: str, sod: int) -> None:
 
 
 def _load_forwarded_cached(cur: sqlite3.Cursor, host: str, sod: int) -> None:
-    forwarded = int(fetch_scalar(cur, SQL_FORWARDED_TODAY, (sod,)))
-
-    cached = int(fetch_scalar(cur, SQL_CACHED_TODAY, (sod,)))
+    forwarded = int(fetch_scalar(cur, SQL_FORWARDED_TODAY, (sod,), default=0))
+    cached = int(fetch_scalar(cur, SQL_CACHED_TODAY, (sod,), default=0))
 
     metrics.METRICS.pihole_queries_forwarded.labels(host).set(float(forwarded))
     metrics.METRICS.pihole_queries_cached.labels(host).set(float(cached))
@@ -218,14 +225,20 @@ def _load_forward_destinations(cur: sqlite3.Cursor, host: str, sod: int) -> None
 def _load_synthetic_destinations(
     cur: sqlite3.Cursor, host: str, sod: int, blocked_list: str
 ) -> None:
-    cache_cnt = int(fetch_scalar(cur, SQL_CACHED_TODAY, (sod,)))
+    cache_cnt = int(fetch_scalar(cur, SQL_CACHED_TODAY, (sod,), default=0))
     metrics.METRICS.pihole_forward_destinations.labels(host, "cache", "cache").set(float(cache_cnt))
     metrics.METRICS.pihole_forward_destinations_responsetime.labels(host, "cache", "cache").set(0.0)
     metrics.METRICS.pihole_forward_destinations_responsevariance.labels(host, "cache", "cache").set(
         0.0
     )
 
-    bl_cnt = int(fetch_scalar(cur, SQL_BLOCKED_TODAY.format(blocked_list=blocked_list), (sod,)))
+    blocklist_value = fetch_scalar(
+        cur,
+        SQL_BLOCKED_TODAY.format(blocked_list=blocked_list),
+        (sod,),
+        default=0,
+    )
+    bl_cnt = int(blocklist_value)
     metrics.METRICS.pihole_forward_destinations.labels(host, "blocklist", "blocklist").set(
         float(bl_cnt)
     )
@@ -259,7 +272,7 @@ def _load_domains_blocked(host: str) -> None:
     try:
         with sqlite_ro(SETTINGS.gravity_db_path) as gconn:
             gcur = gconn.cursor()
-            domains_value = int(fetch_scalar(gcur, SQL_GRAVITY_COUNT))
+            domains_value = int(fetch_scalar(gcur, SQL_GRAVITY_COUNT, default=0))
     except Exception as e:
         if not _gravity_db_fallback_logged:
             logger.info("Gravity DB unavailable; falling back (reason: %s)", e)
@@ -270,7 +283,7 @@ def _load_domains_blocked(host: str) -> None:
         try:
             with sqlite_ro(SETTINGS.ftl_db_path) as conn:
                 cur = conn.cursor()
-                domains_value = int(fetch_scalar(cur, SQL_DOMAIN_BY_ID_COUNT))
+                domains_value = int(fetch_scalar(cur, SQL_DOMAIN_BY_ID_COUNT, default=0))
                 if not _gravity_ftl_fallback_logged:
                     logger.info("Gravity DB fallback: using FTL domain count")
                     _gravity_ftl_fallback_logged = True
