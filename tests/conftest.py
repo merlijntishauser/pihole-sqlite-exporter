@@ -112,9 +112,18 @@ def exporter_config(monkeypatch: pytest.MonkeyPatch, ftl_db: Path, gravity_db: P
 
 
 @pytest.fixture
-def metrics_text(exporter_config: None) -> str:
-    scraper.scrape_and_update()
-    snapshot = metrics.METRICS.get_snapshot()
+def scrape_context(exporter_config: None) -> scraper.ScrapeContext:
+    return scraper.new_context(
+        settings=scraper.SETTINGS,
+        metrics_obj=metrics.METRICS,
+        logger_obj=scraper.logger,
+    )
+
+
+@pytest.fixture
+def metrics_text(scrape_context: scraper.ScrapeContext) -> str:
+    scraper.scrape_and_update(context=scrape_context)
+    snapshot = scrape_context.metrics.get_snapshot()
     return snapshot.payload.decode("utf-8")
 
 

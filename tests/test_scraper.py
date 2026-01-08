@@ -33,25 +33,35 @@ def test_scrape_skipped_when_lock_held(
 ) -> None:
     monkeypatch.setattr(scraper.SETTINGS, "hostname_label", "test-host")
     metrics.METRICS.set_hostname_label("test-host")
+    context = scraper.new_context(
+        settings=scraper.SETTINGS,
+        metrics_obj=metrics.METRICS,
+        logger_obj=scraper.logger,
+    )
 
-    scraper._SCRAPE_LOCK.acquire()
+    context.scrape_lock.acquire()
     try:
         with caplog.at_level("INFO"):
-            scraper.scrape_and_update()
+            scraper.scrape_and_update(context=context)
         assert "Scrape skipped" in caplog.text
     finally:
-        scraper._SCRAPE_LOCK.release()
+        context.scrape_lock.release()
 
 
 def test_lifetime_destinations_cache_hit(monkeypatch: pytest.MonkeyPatch) -> None:
     host = "test-host"
     monkeypatch.setattr(scraper.SETTINGS, "hostname_label", host)
+    context = scraper.new_context(
+        settings=scraper.SETTINGS,
+        metrics_obj=metrics.METRICS,
+        logger_obj=scraper.logger,
+    )
     monkeypatch.setattr(scraper.SETTINGS, "enable_lifetime_dest_counters", True)
     monkeypatch.setattr(scraper.SETTINGS, "lifetime_dest_cache_seconds", 60)
     monkeypatch.setattr(scraper.SETTINGS, "lifetime_dest_scan_interval", 1)
     monkeypatch.setattr(scraper.SETTINGS, "summary_only", False)
     monkeypatch.setattr(scraper.time, "time", lambda: 1000.0)
-    monkeypatch.setattr(scraper, "_lifetime_dest_scan_count", 1)
+    context.lifetime_dest_scan_count = 1
     cache_counter = metrics.METRICS.pihole_exporter_cache_hits_total.labels(
         host, "lifetime_destinations"
     )
@@ -70,12 +80,12 @@ def test_lifetime_destinations_cache_hit(monkeypatch: pytest.MonkeyPatch) -> Non
     )
 
     try:
-        scraper._lifetime_dest_cache = dict(cached)
-        scraper._lifetime_dest_cache_ts = 999.0
-        scraper._load_lifetime_destinations(DummyCursor(), "1,2")
+        context.lifetime_dest_cache = dict(cached)
+        context.lifetime_dest_cache_ts = 999.0
+        scraper._load_lifetime_destinations(context, DummyCursor(), "1,2", host)
     finally:
-        scraper._lifetime_dest_cache = {}
-        scraper._lifetime_dest_cache_ts = 0.0
+        context.lifetime_dest_cache = {}
+        context.lifetime_dest_cache_ts = 0.0
 
     assert called["value"] == cached
     assert cache_counter._value.get() == before_hits + 1
@@ -84,6 +94,11 @@ def test_lifetime_destinations_cache_hit(monkeypatch: pytest.MonkeyPatch) -> Non
 def test_lifetime_destinations_disabled_resets_cache(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(scraper.SETTINGS, "enable_lifetime_dest_counters", False)
     monkeypatch.setattr(scraper.SETTINGS, "summary_only", False)
+    context = scraper.new_context(
+        settings=scraper.SETTINGS,
+        metrics_obj=metrics.METRICS,
+        logger_obj=scraper.logger,
+    )
     called = {}
 
     monkeypatch.setattr(
@@ -93,12 +108,12 @@ def test_lifetime_destinations_disabled_resets_cache(monkeypatch: pytest.MonkeyP
     )
 
     try:
-        scraper._lifetime_dest_cache = {"1.1.1.1": 2}
-        scraper._lifetime_dest_cache_ts = 123.0
-        scraper._load_lifetime_destinations(None, "1,2")
+        context.lifetime_dest_cache = {"1.1.1.1": 2}
+        context.lifetime_dest_cache_ts = 123.0
+        scraper._load_lifetime_destinations(context, None, "1,2", "test-host")
     finally:
-        scraper._lifetime_dest_cache = {}
-        scraper._lifetime_dest_cache_ts = 0.0
+        context.lifetime_dest_cache = {}
+        context.lifetime_dest_cache_ts = 0.0
 
     assert called["value"] == {}
 
@@ -137,9 +152,14 @@ def test_scrape_falls_back_when_gravity_missing(
     monkeypatch.setattr(scraper.SETTINGS, "exporter_tz", "UTC")
     monkeypatch.setattr(scraper.SETTINGS, "enable_lifetime_dest_counters", False)
     metrics.METRICS.set_hostname_label("test-host")
+    context = scraper.new_context(
+        settings=scraper.SETTINGS,
+        metrics_obj=metrics.METRICS,
+        logger_obj=scraper.logger,
+    )
 
-    scraper.scrape_and_update()
-    metrics_text = metrics.METRICS.get_snapshot().payload.decode("utf-8")
+    scraper.scrape_and_update(context=context)
+    metrics_text = context.metrics.get_snapshot().payload.decode("utf-8")
     assert (
         metric_value(metrics_text, "pihole_domains_being_blocked", {"hostname": "test-host"}) == 2.0
     )
@@ -148,6 +168,11 @@ def test_scrape_falls_back_when_gravity_missing(
 def test_lifetime_destinations_metric(
     ftl_db_factory, monkeypatch: pytest.MonkeyPatch, metric_value
 ) -> None:
+    context = scraper.new_context(
+        settings=scraper.SETTINGS,
+        metrics_obj=metrics.METRICS,
+        logger_obj=scraper.logger,
+    )
     now_ts = int(time.time())
     queries = [
         (now_ts - 10, 2, 1, 3, "1.1.1.1", 0.1, "example.com", "10.0.0.1"),
@@ -166,8 +191,8 @@ def test_lifetime_destinations_metric(
     monkeypatch.setattr(scraper.SETTINGS, "summary_only", False)
     metrics.METRICS.set_hostname_label("test-host")
 
-    scraper.scrape_and_update()
-    metrics_text = metrics.METRICS.get_snapshot().payload.decode("utf-8")
+    scraper.scrape_and_update(context=context)
+    metrics_text = context.metrics.get_snapshot().payload.decode("utf-8")
     assert (
         metric_value(
             metrics_text,
@@ -193,7 +218,12 @@ def test_lifetime_destinations_scan_interval_skips_when_cache_present(
     monkeypatch.setattr(scraper.SETTINGS, "lifetime_dest_cache_seconds", 0)
     monkeypatch.setattr(scraper.SETTINGS, "lifetime_dest_scan_interval", 2)
     monkeypatch.setattr(scraper.SETTINGS, "summary_only", False)
-    monkeypatch.setattr(scraper, "_lifetime_dest_scan_count", 1)
+    context = scraper.new_context(
+        settings=scraper.SETTINGS,
+        metrics_obj=metrics.METRICS,
+        logger_obj=scraper.logger,
+    )
+    context.lifetime_dest_scan_count = 1
     cached = {"1.1.1.1": 2, "cache": 1, "blocklist": 0}
     called = {}
 
@@ -208,12 +238,12 @@ def test_lifetime_destinations_scan_interval_skips_when_cache_present(
     )
 
     try:
-        scraper._lifetime_dest_cache = dict(cached)
-        scraper._lifetime_dest_cache_ts = 0.0
-        scraper._load_lifetime_destinations(DummyCursor(), "1,2")
+        context.lifetime_dest_cache = dict(cached)
+        context.lifetime_dest_cache_ts = 0.0
+        scraper._load_lifetime_destinations(context, DummyCursor(), "1,2", "test-host")
     finally:
-        scraper._lifetime_dest_cache = {}
-        scraper._lifetime_dest_cache_ts = 0.0
+        context.lifetime_dest_cache = {}
+        context.lifetime_dest_cache_ts = 0.0
 
     assert called["value"] == cached
 
@@ -224,7 +254,12 @@ def test_lifetime_destinations_apply_max_entries(monkeypatch: pytest.MonkeyPatch
     monkeypatch.setattr(scraper.SETTINGS, "lifetime_dest_scan_interval", 1)
     monkeypatch.setattr(scraper.SETTINGS, "lifetime_dest_max_entries", 1)
     monkeypatch.setattr(scraper.SETTINGS, "summary_only", False)
-    monkeypatch.setattr(scraper, "_lifetime_dest_scan_count", 1)
+    context = scraper.new_context(
+        settings=scraper.SETTINGS,
+        metrics_obj=metrics.METRICS,
+        logger_obj=scraper.logger,
+    )
+    context.lifetime_dest_scan_count = 1
     called = {}
 
     class DummyCursor:
@@ -245,10 +280,10 @@ def test_lifetime_destinations_apply_max_entries(monkeypatch: pytest.MonkeyPatch
     )
 
     try:
-        scraper._load_lifetime_destinations(DummyCursor(), "1,2")
+        scraper._load_lifetime_destinations(context, DummyCursor(), "1,2", "test-host")
     finally:
-        scraper._lifetime_dest_cache = {}
-        scraper._lifetime_dest_cache_ts = 0.0
+        context.lifetime_dest_cache = {}
+        context.lifetime_dest_cache_ts = 0.0
 
     assert called["value"]["1.1.1.1"] == 5
     assert "2.2.2.2" not in called["value"]
@@ -259,6 +294,11 @@ def test_lifetime_destinations_apply_max_entries(monkeypatch: pytest.MonkeyPatch
 def test_summary_only_skips_high_cardinality(
     ftl_db_factory, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    context = scraper.new_context(
+        settings=scraper.SETTINGS,
+        metrics_obj=metrics.METRICS,
+        logger_obj=scraper.logger,
+    )
     ftl_path = ftl_db_factory()
     monkeypatch.setattr(scraper.SETTINGS, "ftl_db_path", str(ftl_path))
     monkeypatch.setattr(scraper.SETTINGS, "gravity_db_path", str(ftl_path))
@@ -268,8 +308,8 @@ def test_summary_only_skips_high_cardinality(
     monkeypatch.setattr(scraper.SETTINGS, "summary_only", True)
     metrics.METRICS.set_hostname_label("test-host")
 
-    scraper.scrape_and_update()
-    metrics_text = metrics.METRICS.get_snapshot().payload.decode("utf-8")
+    scraper.scrape_and_update(context=context)
+    metrics_text = context.metrics.get_snapshot().payload.decode("utf-8")
     assert "pihole_top_ads{" not in metrics_text
     assert "pihole_top_queries{" not in metrics_text
     assert "pihole_top_sources{" not in metrics_text
@@ -280,6 +320,12 @@ def test_summary_only_skips_high_cardinality(
 def test_load_domains_blocked_warns_on_double_failure(
     monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
+    context = scraper.new_context(
+        settings=scraper.SETTINGS,
+        metrics_obj=metrics.METRICS,
+        logger_obj=scraper.logger,
+    )
+
     class FakeGauge:
         def __init__(self) -> None:
             self.calls = []
@@ -297,11 +343,11 @@ def test_load_domains_blocked_warns_on_double_failure(
     fake = FakeGauge()
     monkeypatch.setattr(metrics.METRICS, "pihole_domains_being_blocked", fake)
     monkeypatch.setattr(scraper, "sqlite_ro", _boom)
-    monkeypatch.setattr(scraper, "_gravity_db_fallback_logged", False)
-    monkeypatch.setattr(scraper, "_gravity_ftl_fallback_logged", False)
+    context.gravity_db_fallback_logged = False
+    context.gravity_ftl_fallback_logged = False
 
     with caplog.at_level("INFO"):
-        scraper._load_domains_blocked("test-host")
+        scraper._load_domains_blocked(context, "test-host")
 
     assert "Gravity DB unavailable" in caplog.text
     assert "Fallback domain count failed" in caplog.text
@@ -311,6 +357,12 @@ def test_load_domains_blocked_warns_on_double_failure(
 def test_scrape_and_update_logs_failure_and_snapshot_error(
     monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
+    context = scraper.new_context(
+        settings=scraper.SETTINGS,
+        metrics_obj=metrics.METRICS,
+        logger_obj=scraper.logger,
+    )
+
     class DummyConn:
         def cursor(self):
             return object()
@@ -334,7 +386,7 @@ def test_scrape_and_update_logs_failure_and_snapshot_error(
     monkeypatch.setattr(scraper.time, "perf_counter", lambda: 1.0)
 
     with pytest.raises(RuntimeError), caplog.at_level("ERROR"):
-        scraper.scrape_and_update()
+        scraper.scrape_and_update(context=context)
 
     assert "Scrape failed" in caplog.text
     assert "Failed to update metrics snapshot cache" in caplog.text
@@ -348,8 +400,13 @@ def test_scrape_loop_sleeps_and_stops(monkeypatch: pytest.MonkeyPatch) -> None:
     calls = {"scrape": 0, "sleep": []}
     host = "test-host"
     monkeypatch.setattr(scraper.SETTINGS, "hostname_label", host)
+    context = scraper.new_context(
+        settings=scraper.SETTINGS,
+        metrics_obj=metrics.METRICS,
+        logger_obj=scraper.logger,
+    )
 
-    def _scrape():
+    def _scrape(*_args, **_kwargs):
         calls["scrape"] += 1
         stop_event.set()
 
@@ -363,7 +420,12 @@ def test_scrape_loop_sleeps_and_stops(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(scraper.SETTINGS, "scrape_interval", 5)
     times = [100.0, 101.0]
 
-    scraper._scrape_loop(stop_event=stop_event, sleep_fn=_sleep_fn, time_fn=_time_fn)
+    scraper._scrape_loop(
+        context=context,
+        stop_event=stop_event,
+        sleep_fn=_sleep_fn,
+        time_fn=_time_fn,
+    )
 
     assert calls["scrape"] == 1
     assert calls["sleep"] == [4.0]
@@ -376,6 +438,11 @@ def test_scrape_loop_logs_warning_on_failure(
 ) -> None:
     stop_event = threading.Event()
     times = [100.0, 101.0]
+    context = scraper.new_context(
+        settings=scraper.SETTINGS,
+        metrics_obj=metrics.METRICS,
+        logger_obj=scraper.logger,
+    )
 
     def _scrape():
         raise RuntimeError("boom")
@@ -390,13 +457,23 @@ def test_scrape_loop_logs_warning_on_failure(
     monkeypatch.setattr(scraper.SETTINGS, "scrape_interval", 5)
 
     with caplog.at_level("WARNING"):
-        scraper._scrape_loop(stop_event=stop_event, sleep_fn=_sleep_fn, time_fn=_time_fn)
+        scraper._scrape_loop(
+            context=context,
+            stop_event=stop_event,
+            sleep_fn=_sleep_fn,
+            time_fn=_time_fn,
+        )
 
     assert "Background scrape failed" in caplog.text
 
 
 def test_start_background_scrape_starts_thread(monkeypatch: pytest.MonkeyPatch) -> None:
     created = {}
+    context = scraper.new_context(
+        settings=scraper.SETTINGS,
+        metrics_obj=metrics.METRICS,
+        logger_obj=scraper.logger,
+    )
 
     class FakeThread:
         def __init__(self, *, target, kwargs, daemon) -> None:
@@ -410,9 +487,9 @@ def test_start_background_scrape_starts_thread(monkeypatch: pytest.MonkeyPatch) 
 
     monkeypatch.setattr(scraper.threading, "Thread", FakeThread)
 
-    thread = scraper.start_background_scrape(initial_delay=2.5)
+    thread = scraper.start_background_scrape(initial_delay=2.5, context=context)
 
     assert created["target"] == scraper._scrape_loop
-    assert created["kwargs"] == {"initial_delay": 2.5}
+    assert created["kwargs"] == {"initial_delay": 2.5, "context": context}
     assert created["daemon"] is True
     assert thread.started is True
