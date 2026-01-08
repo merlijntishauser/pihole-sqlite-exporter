@@ -21,6 +21,7 @@ Thanks for contributing! This project values XP practices: clear naming, readabl
 ## Tests and linting
 - **Lint:** `ruff check .`
 - **Format:** `ruff format .`
+- **Type check:** `pyright` (or `make typecheck`)
 - **Tests:** `pytest`
 
 ## Docker verification (optional)

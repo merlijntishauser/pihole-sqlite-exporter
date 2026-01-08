@@ -19,7 +19,7 @@ Prometheus exporter that reads Pi-hole metrics directly from `pihole-FTL.db` (an
 - Alpine keeps the image small and limits the attack surface; the hardened base emphasizes secure defaults and a trimmed runtime.
 
 ## Repository Overview
-- **Docker image:** hardened minimal runtime (non-root by default) with an HTTP healthcheck on `/metrics`.
+- **Docker image:** hardened minimal runtime (non-root by default) with an HTTP healthcheck on `/healthz`.
 - **Docker Hub:** https://hub.docker.com/r/merlijntishauser/pihole-sqlite-exporter
 - **GitHub:** https://github.com/merlijntishauser/pihole-sqlite-exporter
 - **Scan summary (2026-01-08 09:20 UTC):** Dockle: INFO=2, PASS=15. Trivy: 0 vulnerabilities detected.

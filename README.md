@@ -4,7 +4,7 @@ Prometheus exporter that reads Pi-hole metrics from **pihole-FTL.db** (and optio
 
 ## Repository Overview
 <!-- overview:start -->
-- **Docker image:** hardened minimal runtime (non-root by default) with an HTTP healthcheck on `/metrics`.
+- **Docker image:** hardened minimal runtime (non-root by default) with an HTTP healthcheck on `/healthz`.
 - **Docker Hub:** https://hub.docker.com/r/merlijntishauser/pihole-sqlite-exporter
 - **GitHub:** https://github.com/merlijntishauser/pihole-sqlite-exporter
 - **Scan summary (2026-01-08 09:20 UTC):** Dockle: INFO=2, PASS=15. Trivy: 0 vulnerabilities detected.
@@ -50,6 +50,8 @@ Exposes, among others:
 | LIFETIME_DEST_CACHE_SECONDS | 900 | cache lifetime destinations (seconds); 0 disables cache |
 | DEBUG | false | enable debug logging |
 | GIT_COMMIT | (unset) | git commit string for startup log (optional) |
+| GIT_SHA | (unset) | alternate commit string for startup log (optional) |
+| SOURCE_COMMIT | (unset) | alternate commit string for startup log (optional) |
 
 ## CLI
 - `--verbose` enables debug logging.

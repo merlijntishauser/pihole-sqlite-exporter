@@ -7,7 +7,7 @@ Top priority (XP values)
 
 Project context
 - Python Prometheus exporter reading Pi-hole metrics from SQLite (no HTTP API).
-- Docker image uses dhi.io/python:3-alpine3.22 with dependencies installed into /app/vendor.
+- Docker image uses dhi.io/python:3-alpine3.22 with dependencies installed into /app/src.
 - Multi-arch Docker releases via GitHub Actions; Dockle + Trivy scans update README and Docker Hub description.
 - Tests are split into logical modules under tests/.
 - SQL queries live in src/pihole_sqlite_exporter/queries.py.
