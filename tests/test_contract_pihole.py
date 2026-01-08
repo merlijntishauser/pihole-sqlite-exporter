@@ -28,13 +28,16 @@ def _columns(conn: sqlite3.Connection, table: str) -> set[str]:
 def test_pihole_schema_contract() -> None:
     ftl_db, gravity_db = _get_contract_paths()
     with sqlite3.connect(ftl_db) as conn:
-        tables = {
-            row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table';")
+        objects = {
+            row[0]
+            for row in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type IN ('table', 'view');"
+            )
         }
-        assert "counters" in tables
-        assert "queries" in tables
-        assert "client_by_id" in tables
-        assert "domain_by_id" in tables
+        assert "counters" in objects
+        assert "queries" in objects
+        assert "client_by_id" in objects
+        assert "domain_by_id" in objects
 
         counters_cols = _columns(conn, "counters")
         assert {"id", "value"}.issubset(counters_cols)
