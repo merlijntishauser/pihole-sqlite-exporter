@@ -16,16 +16,33 @@ Prometheus exporter that reads Pi-hole metrics from **pihole-FTL.db** (and optio
 - Read-only SQLite
 
 ## Metrics
-Exposes, among others:
-- pihole_dns_queries_total / pihole_dns_queries_blocked_total
-- pihole_ads_blocked_today
-- pihole_ads_percentage_today
-- pihole_dns_queries_today / all_types
-- pihole_querytypes (A/AAAA/...)
-- pihole_reply (cname/nx_domain/...)
-- pihole_forward_destinations (+ response time/variance)
-- pihole_top_ads / top_queries / top_sources
-- pihole_unique_clients / unique_domains
+All collected metrics (example values shown):
+| Metric | Type | Example |
+|---|---|---|
+| pihole_dns_queries_total | counter | `pihole_dns_queries_total{hostname="pi"} 123456` |
+| pihole_dns_queries_blocked_total | counter | `pihole_dns_queries_blocked_total{hostname="pi"} 1234` |
+| pihole_forward_destinations_total | counter | `pihole_forward_destinations_total{hostname="pi",destination="cache",destination_name="cache"} 321` |
+| pihole_ads_blocked_today | gauge | `pihole_ads_blocked_today{hostname="pi"} 123` |
+| pihole_ads_percentage_today | gauge | `pihole_ads_percentage_today{hostname="pi"} 12.3` |
+| pihole_clients_ever_seen | gauge | `pihole_clients_ever_seen{hostname="pi"} 42` |
+| pihole_dns_queries_all_types | gauge | `pihole_dns_queries_all_types{hostname="pi"} 4567` |
+| pihole_dns_queries_today | gauge | `pihole_dns_queries_today{hostname="pi"} 3456` |
+| pihole_domains_being_blocked | gauge | `pihole_domains_being_blocked{hostname="pi"} 125000` |
+| pihole_forward_destinations | gauge | `pihole_forward_destinations{hostname="pi",destination="cache",destination_name="cache"} 321` |
+| pihole_forward_destinations_responsetime | gauge | `pihole_forward_destinations_responsetime{hostname="pi",destination="1.1.1.1",destination_name="cloudflare"} 0.032` |
+| pihole_forward_destinations_responsevariance | gauge | `pihole_forward_destinations_responsevariance{hostname="pi",destination="1.1.1.1",destination_name="cloudflare"} 0.004` |
+| pihole_queries_cached | gauge | `pihole_queries_cached{hostname="pi"} 1200` |
+| pihole_queries_forwarded | gauge | `pihole_queries_forwarded{hostname="pi"} 2300` |
+| pihole_querytypes | gauge | `pihole_querytypes{hostname="pi",type="A"} 2400` |
+| pihole_reply | gauge | `pihole_reply{hostname="pi",type="NODATA"} 120` |
+| pihole_scrape_duration_seconds | gauge | `pihole_scrape_duration_seconds{hostname="pi"} 0.145` |
+| pihole_scrape_success | gauge | `pihole_scrape_success{hostname="pi"} 1` |
+| pihole_status | gauge | `pihole_status{hostname="pi"} 1` |
+| pihole_top_ads | gauge | `pihole_top_ads{hostname="pi",domain="ads.example"} 42` |
+| pihole_top_queries | gauge | `pihole_top_queries{hostname="pi",domain="example.com"} 120` |
+| pihole_top_sources | gauge | `pihole_top_sources{hostname="pi",source="192.168.1.10",source_name="laptop"} 80` |
+| pihole_unique_clients | gauge | `pihole_unique_clients{hostname="pi"} 12` |
+| pihole_unique_domains | gauge | `pihole_unique_domains{hostname="pi"} 987` |
 
 ## How it works
 - A background loop scrapes SQLite on an interval (`SCRAPE_INTERVAL`) and updates the in-memory registry.
