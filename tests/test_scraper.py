@@ -46,7 +46,10 @@ def test_scrape_skipped_when_lock_held(
 def test_lifetime_destinations_cache_hit(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(scraper.SETTINGS, "enable_lifetime_dest_counters", True)
     monkeypatch.setattr(scraper.SETTINGS, "lifetime_dest_cache_seconds", 60)
+    monkeypatch.setattr(scraper.SETTINGS, "lifetime_dest_scan_interval", 1)
+    monkeypatch.setattr(scraper.SETTINGS, "summary_only", False)
     monkeypatch.setattr(scraper.time, "time", lambda: 1000.0)
+    monkeypatch.setattr(scraper, "_lifetime_dest_scan_count", 1)
     cached = {"1.1.1.1": 2, "cache": 1, "blocklist": 0}
     called = {}
 
@@ -73,6 +76,7 @@ def test_lifetime_destinations_cache_hit(monkeypatch: pytest.MonkeyPatch) -> Non
 
 def test_lifetime_destinations_disabled_resets_cache(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(scraper.SETTINGS, "enable_lifetime_dest_counters", False)
+    monkeypatch.setattr(scraper.SETTINGS, "summary_only", False)
     called = {}
 
     monkeypatch.setattr(
@@ -150,6 +154,9 @@ def test_lifetime_destinations_metric(
     monkeypatch.setattr(scraper.SETTINGS, "hostname_label", "test-host")
     monkeypatch.setattr(scraper.SETTINGS, "exporter_tz", "UTC")
     monkeypatch.setattr(scraper.SETTINGS, "enable_lifetime_dest_counters", True)
+    monkeypatch.setattr(scraper.SETTINGS, "lifetime_dest_scan_interval", 1)
+    monkeypatch.setattr(scraper.SETTINGS, "lifetime_dest_max_entries", 10)
+    monkeypatch.setattr(scraper.SETTINGS, "summary_only", False)
     metrics.METRICS.set_hostname_label("test-host")
 
     scraper.scrape_and_update()
@@ -162,6 +169,97 @@ def test_lifetime_destinations_metric(
         )
         == 2.0
     )
+
+
+def test_lifetime_destinations_scan_interval_skips_when_cache_present(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(scraper.SETTINGS, "enable_lifetime_dest_counters", True)
+    monkeypatch.setattr(scraper.SETTINGS, "lifetime_dest_cache_seconds", 0)
+    monkeypatch.setattr(scraper.SETTINGS, "lifetime_dest_scan_interval", 2)
+    monkeypatch.setattr(scraper.SETTINGS, "summary_only", False)
+    monkeypatch.setattr(scraper, "_lifetime_dest_scan_count", 1)
+    cached = {"1.1.1.1": 2, "cache": 1, "blocklist": 0}
+    called = {}
+
+    class DummyCursor:
+        def execute(self, *args, **kwargs):
+            raise AssertionError("execute should not be called when scan is skipped")
+
+    monkeypatch.setattr(
+        metrics.METRICS,
+        "set_forward_destinations_lifetime",
+        lambda value: called.setdefault("value", value),
+    )
+
+    try:
+        scraper._lifetime_dest_cache = dict(cached)
+        scraper._lifetime_dest_cache_ts = 0.0
+        scraper._load_lifetime_destinations(DummyCursor(), "1,2")
+    finally:
+        scraper._lifetime_dest_cache = {}
+        scraper._lifetime_dest_cache_ts = 0.0
+
+    assert called["value"] == cached
+
+
+def test_lifetime_destinations_apply_max_entries(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(scraper.SETTINGS, "enable_lifetime_dest_counters", True)
+    monkeypatch.setattr(scraper.SETTINGS, "lifetime_dest_cache_seconds", 0)
+    monkeypatch.setattr(scraper.SETTINGS, "lifetime_dest_scan_interval", 1)
+    monkeypatch.setattr(scraper.SETTINGS, "lifetime_dest_max_entries", 1)
+    monkeypatch.setattr(scraper.SETTINGS, "summary_only", False)
+    monkeypatch.setattr(scraper, "_lifetime_dest_scan_count", 1)
+    called = {}
+
+    class DummyCursor:
+        def execute(self, *args, **kwargs):
+            return None
+
+        def fetchall(self):
+            return [("1.1.1.1", 5), ("2.2.2.2", 2)]
+
+    def _fake_fetch_scalar(*args, **kwargs):
+        return 1
+
+    monkeypatch.setattr(scraper, "fetch_scalar", _fake_fetch_scalar)
+    monkeypatch.setattr(
+        metrics.METRICS,
+        "set_forward_destinations_lifetime",
+        lambda value: called.setdefault("value", value),
+    )
+
+    try:
+        scraper._load_lifetime_destinations(DummyCursor(), "1,2")
+    finally:
+        scraper._lifetime_dest_cache = {}
+        scraper._lifetime_dest_cache_ts = 0.0
+
+    assert called["value"]["1.1.1.1"] == 5
+    assert "2.2.2.2" not in called["value"]
+    assert called["value"]["cache"] == 1
+    assert called["value"]["blocklist"] == 1
+
+
+def test_summary_only_skips_high_cardinality(
+    ftl_db_factory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ftl_path = ftl_db_factory()
+    monkeypatch.setattr(scraper.SETTINGS, "ftl_db_path", str(ftl_path))
+    monkeypatch.setattr(scraper.SETTINGS, "gravity_db_path", str(ftl_path))
+    monkeypatch.setattr(scraper.SETTINGS, "hostname_label", "test-host")
+    monkeypatch.setattr(scraper.SETTINGS, "exporter_tz", "UTC")
+    monkeypatch.setattr(scraper.SETTINGS, "enable_lifetime_dest_counters", True)
+    monkeypatch.setattr(scraper.SETTINGS, "summary_only", True)
+    metrics.METRICS.set_hostname_label("test-host")
+
+    scraper.scrape_and_update()
+    metrics_text = metrics.METRICS.get_snapshot().payload.decode("utf-8")
+    assert "pihole_top_ads{" not in metrics_text
+    assert "pihole_top_queries{" not in metrics_text
+    assert "pihole_top_sources{" not in metrics_text
+    assert "pihole_forward_destinations{" not in metrics_text
+    assert "pihole_forward_destinations_total{" not in metrics_text
 
 
 def test_load_domains_blocked_warns_on_double_failure(

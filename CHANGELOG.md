@@ -1,6 +1,7 @@
 # Changelog
 
 ## 0.3.6 (unreleased)
+- Added summary-only scraping and new lifetime destination controls (scan interval and max entries) to reduce memory usage.
 - Consolidated exporter tests into a single module.
 - Refined changelog wording and ensured dated entries.
 

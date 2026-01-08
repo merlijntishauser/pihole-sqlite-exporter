@@ -3,7 +3,6 @@
 ## Short-term (next)
 
 - Make `ENABLE_LIFETIME_DEST_COUNTERS` a runtime toggle in logs and metrics (emit when disabled) to explain missing series.
-- Consolidate exporter-related tests into a single module (merge `test_exporter_main.py` and `test_health_ready.py`).
 - Add exporter self-metrics (scrape loop lag, last error, cache hit/miss, per-query timings).
 - Add a high-cardinality-safe `/metrics?summary=1` mode that omits top_* and forward destination series.
 - Add `pihole_gravity_available` and continue scraping when gravity.db is unavailable.

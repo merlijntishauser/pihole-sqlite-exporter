@@ -16,6 +16,9 @@ class TestSettings:
             "EXPORTER_TZ": "UTC",
             "ENABLE_LIFETIME_DEST_COUNTERS": "false",
             "LIFETIME_DEST_CACHE_SECONDS": "300",
+            "LIFETIME_DEST_SCAN_INTERVAL": "30",
+            "LIFETIME_DEST_MAX_ENTRIES": "1500",
+            "SUMMARY_ONLY": "true",
         }
 
         settings = Settings.from_env(env)
@@ -30,6 +33,9 @@ class TestSettings:
         assert settings.exporter_tz == "UTC"
         assert settings.enable_lifetime_dest_counters is False
         assert settings.lifetime_dest_cache_seconds == 300
+        assert settings.lifetime_dest_scan_interval == 30
+        assert settings.lifetime_dest_max_entries == 1500
+        assert settings.summary_only is True
 
     @pytest.mark.parametrize(
         ("env", "error"),
@@ -39,6 +45,14 @@ class TestSettings:
             ({"TOP_N": "0"}, "TOP_N must be >= 1"),
             ({"SCRAPE_INTERVAL": "0"}, "SCRAPE_INTERVAL must be >= 1"),
             ({"LIFETIME_DEST_CACHE_SECONDS": "-1"}, "LIFETIME_DEST_CACHE_SECONDS must be >= 0"),
+            (
+                {"LIFETIME_DEST_SCAN_INTERVAL": "0"},
+                "LIFETIME_DEST_SCAN_INTERVAL must be >= 1",
+            ),
+            (
+                {"LIFETIME_DEST_MAX_ENTRIES": "-1"},
+                "LIFETIME_DEST_MAX_ENTRIES must be >= 0",
+            ),
         ],
     )
     def test_settings_from_env_invalid(self, env, error: str) -> None:

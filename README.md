@@ -66,10 +66,13 @@ All collected metrics (example values shown):
 | SCRAPE_INTERVAL | 60 | background scrape interval (seconds) |
 | ENABLE_LIFETIME_DEST_COUNTERS | true | scan full queries table for lifetime destinations |
 | LIFETIME_DEST_CACHE_SECONDS | 900 | cache lifetime destinations (seconds); 0 disables cache |
+| LIFETIME_DEST_SCAN_INTERVAL | 60 | run lifetime destination scan every N scrapes |
+| LIFETIME_DEST_MAX_ENTRIES | 2000 | cap lifetime destination labelsets (0 disables) |
 | DEBUG | false | enable debug logging |
 | GIT_COMMIT | (unset) | git commit string for startup log (optional) |
 | GIT_SHA | (unset) | alternate commit string for startup log (optional) |
 | SOURCE_COMMIT | (unset) | alternate commit string for startup log (optional) |
+| SUMMARY_ONLY | false | omit high-cardinality series (top_* and forward_destinations*) |
 
 ## CLI
 - `--verbose` enables debug logging.

@@ -15,6 +15,9 @@ class Settings:
     exporter_tz: str
     enable_lifetime_dest_counters: bool
     lifetime_dest_cache_seconds: int
+    lifetime_dest_scan_interval: int
+    lifetime_dest_max_entries: int
+    summary_only: bool
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> "Settings":
@@ -58,6 +61,9 @@ class Settings:
                 environment,
             ),
             lifetime_dest_cache_seconds=_get_nonneg_int("LIFETIME_DEST_CACHE_SECONDS", 900),
+            lifetime_dest_scan_interval=_get_int("LIFETIME_DEST_SCAN_INTERVAL", 60),
+            lifetime_dest_max_entries=_get_nonneg_int("LIFETIME_DEST_MAX_ENTRIES", 2000),
+            summary_only=env_truthy("SUMMARY_ONLY", "false", environment),
         )
 
 

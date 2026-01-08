@@ -107,6 +107,7 @@ def exporter_config(monkeypatch: pytest.MonkeyPatch, ftl_db: Path, gravity_db: P
     monkeypatch.setattr(scraper.SETTINGS, "exporter_tz", "UTC")
     monkeypatch.setattr(scraper.SETTINGS, "top_n", 10)
     monkeypatch.setattr(scraper.SETTINGS, "enable_lifetime_dest_counters", False)
+    monkeypatch.setattr(scraper.SETTINGS, "summary_only", False)
     metrics.METRICS.set_hostname_label("test-host")
 
 

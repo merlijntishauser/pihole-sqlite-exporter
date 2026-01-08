@@ -41,6 +41,7 @@ _gravity_db_fallback_logged = False
 _gravity_ftl_fallback_logged = False
 _lifetime_dest_cache: dict[str, int] = {}
 _lifetime_dest_cache_ts = 0.0
+_lifetime_dest_scan_count = 0
 
 
 SETTINGS = Settings.from_env()
@@ -109,6 +110,12 @@ def _load_lifetime_destinations(cur: sqlite3.Cursor, blocked_list: str) -> None:
         _lifetime_dest_cache_ts = 0.0
         return
 
+    if SETTINGS.summary_only:
+        metrics.METRICS.set_forward_destinations_lifetime({})
+        _lifetime_dest_cache = {}
+        _lifetime_dest_cache_ts = 0.0
+        return
+
     cache_seconds = SETTINGS.lifetime_dest_cache_seconds
     now = time.time()
     if (
@@ -124,10 +131,34 @@ def _load_lifetime_destinations(cur: sqlite3.Cursor, blocked_list: str) -> None:
         )
         return
 
+    scan_interval = SETTINGS.lifetime_dest_scan_interval
+    scan_due = True
+    if scan_interval > 1:
+        scan_due = _lifetime_dest_scan_count % scan_interval == 0
+    if not scan_due and _lifetime_dest_cache:
+        metrics.METRICS.set_forward_destinations_lifetime(_lifetime_dest_cache)
+        logger.debug(
+            "Lifetime destinations scan skipped: interval=%d labelsets=%d",
+            scan_interval,
+            len(_lifetime_dest_cache),
+        )
+        return
+
     lifetime = {}
     cur.execute(SQL_LIFETIME_FORWARD_DESTS)
-    for fwd, cnt in cur.fetchall():
-        lifetime[str(fwd)] = int(cnt)
+    forward_entries = [(str(fwd), int(cnt)) for fwd, cnt in cur.fetchall()]
+    max_entries = SETTINGS.lifetime_dest_max_entries
+    if max_entries > 0 and len(forward_entries) > max_entries:
+        forward_entries = sorted(forward_entries, key=lambda item: (-item[1], item[0]))[
+            :max_entries
+        ]
+        logger.debug(
+            "Lifetime destinations capped: max=%d labelsets=%d",
+            max_entries,
+            len(forward_entries),
+        )
+    for dest, cnt in forward_entries:
+        lifetime[dest] = cnt
 
     lifetime["cache"] = int(fetch_scalar(cur, SQL_LIFETIME_CACHE, default=0))
 
@@ -295,6 +326,7 @@ def _load_domains_blocked(host: str) -> None:
 
 
 def scrape_and_update():
+    global _lifetime_dest_scan_count
     if not _SCRAPE_LOCK.acquire(blocking=False):
         ctx = _log_context(SETTINGS.hostname_label, start_of_day_ts(), now_ts())
         logger.info(
@@ -311,6 +343,7 @@ def scrape_and_update():
     ctx = _log_context(host, sod, now)
     start = time.perf_counter()
     success = 0.0
+    _lifetime_dest_scan_count += 1
 
     logger.debug(
         "Scrape start (host=%s, sod=%s, now=%s, tz=%s)",
@@ -334,9 +367,10 @@ def scrape_and_update():
             _load_query_types(cur, host, sod)
             _load_reply_types(cur, host, sod)
             _load_forwarded_cached(cur, host, sod)
-            _load_forward_destinations(cur, host, sod)
-            _load_synthetic_destinations(cur, host, sod, blocked_list)
-            _load_top_lists(cur, host, sod, blocked_list, SETTINGS.top_n)
+            if not SETTINGS.summary_only:
+                _load_forward_destinations(cur, host, sod)
+                _load_synthetic_destinations(cur, host, sod, blocked_list)
+                _load_top_lists(cur, host, sod, blocked_list, SETTINGS.top_n)
 
         _load_domains_blocked(host)
         success = 1.0
