@@ -19,6 +19,8 @@ Workflow preferences
 - Use apply_patch for single-file edits when practical.
 - Keep edits ASCII unless file already uses Unicode.
 - Prefer clear, minimal comments only when code is non-obvious.
+- Avoid ternary expressions; use full if/else blocks.
+- When assigning values conditionally, set a default first and only override in an if block.
 
 Refactor expectations
 - Use scraper.py, http_server.py, metrics.py, and db.py modules in src/pihole_sqlite_exporter.

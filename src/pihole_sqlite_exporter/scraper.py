@@ -155,9 +155,10 @@ def _load_queries_today(cur: sqlite3.Cursor, host: str, sod: int, blocked_list: 
     metrics.METRICS.pihole_dns_queries_today.labels(host).set(float(q_today))
     metrics.METRICS.pihole_dns_queries_all_types.labels(host).set(float(q_today))
     metrics.METRICS.pihole_ads_blocked_today.labels(host).set(float(b_today))
-    metrics.METRICS.pihole_ads_percentage_today.labels(host).set(
-        (b_today / q_today * 100.0) if q_today > 0 else 0.0
-    )
+    percentage = 0.0
+    if q_today > 0:
+        percentage = b_today / q_today * 100.0
+    metrics.METRICS.pihole_ads_percentage_today.labels(host).set(percentage)
 
 
 def _load_unique_counts(cur: sqlite3.Cursor, host: str, now: int) -> None:

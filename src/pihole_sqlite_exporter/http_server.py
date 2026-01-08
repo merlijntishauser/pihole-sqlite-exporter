@@ -26,8 +26,12 @@ def make_handler(get_snapshot, get_health, get_ready, logger=None):
                     user_agent,
                     self.path,
                 )
-                ok, msg = get_health() if self.path == "/healthz" else get_ready()
-                status = 200 if ok else 503
+                ok, msg = get_ready()
+                if self.path == "/healthz":
+                    ok, msg = get_health()
+                status = 503
+                if ok:
+                    status = 200
                 payload = msg.encode()
                 self.send_response(status)
                 self.send_header("Content-Type", "text/plain; charset=utf-8")

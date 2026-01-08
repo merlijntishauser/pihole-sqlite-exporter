@@ -251,7 +251,9 @@ class Metrics:
         if timestamp is None:
             timestamp = time.time()
         with self._scrape_status_lock:
-            self._last_scrape_success = 1 if success else 0
+            self._last_scrape_success = 0
+            if success:
+                self._last_scrape_success = 1
             self._last_scrape_timestamp = timestamp
             if success:
                 self._last_successful_scrape_timestamp = timestamp

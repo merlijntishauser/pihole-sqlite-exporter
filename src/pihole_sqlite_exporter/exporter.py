@@ -23,8 +23,11 @@ def variance(values):
 
 
 def configure_logging(verbose: bool) -> None:
+    level = logging.INFO
+    if verbose:
+        level = logging.DEBUG
     logging.basicConfig(
-        level=logging.DEBUG if verbose else logging.INFO,
+        level=level,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
 
@@ -57,7 +60,9 @@ def _health_status() -> tuple[bool, str]:
     snapshot = metrics.METRICS.get_snapshot()
     last_success, _last_scrape_ts, _last_success_ts = metrics.METRICS.get_scrape_status()
     max_age_seconds = max(1, scraper.SETTINGS.scrape_interval) * 2
-    snapshot_age = time.time() - snapshot.timestamp if snapshot.timestamp > 0 else float("inf")
+    snapshot_age = float("inf")
+    if snapshot.timestamp > 0:
+        snapshot_age = time.time() - snapshot.timestamp
     if last_success != 1:
         return False, "last scrape failed\n"
     if snapshot_age > max_age_seconds:
@@ -92,21 +97,21 @@ def main():
     else:
         logger.info("Exporter version=%s commit=%s", version, commit)
 
-        logger.info(
-            (
-                "Starting exporter (listen=%s:%s, tz=%s, ftl_db=%s, gravity_db=%s, top_n=%s, "
-                "lifetime_dest_counters=%s, lifetime_dest_cache_seconds=%s, scrape_interval=%s)"
-            ),
-            scraper.SETTINGS.listen_addr,
-            scraper.SETTINGS.listen_port,
-            scraper.SETTINGS.exporter_tz,
-            scraper.SETTINGS.ftl_db_path,
-            scraper.SETTINGS.gravity_db_path,
-            scraper.SETTINGS.top_n,
-            scraper.SETTINGS.enable_lifetime_dest_counters,
-            scraper.SETTINGS.lifetime_dest_cache_seconds,
-            scraper.SETTINGS.scrape_interval,
-        )
+    logger.info(
+        (
+            "Starting exporter (listen=%s:%s, tz=%s, ftl_db=%s, gravity_db=%s, top_n=%s, "
+            "lifetime_dest_counters=%s, lifetime_dest_cache_seconds=%s, scrape_interval=%s)"
+        ),
+        scraper.SETTINGS.listen_addr,
+        scraper.SETTINGS.listen_port,
+        scraper.SETTINGS.exporter_tz,
+        scraper.SETTINGS.ftl_db_path,
+        scraper.SETTINGS.gravity_db_path,
+        scraper.SETTINGS.top_n,
+        scraper.SETTINGS.enable_lifetime_dest_counters,
+        scraper.SETTINGS.lifetime_dest_cache_seconds,
+        scraper.SETTINGS.scrape_interval,
+    )
 
     try:
         scrape_and_update()
