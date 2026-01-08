@@ -1,13 +1,16 @@
 ARG PYTHON_BASE_IMAGE=dhi.io/python:3-alpine3.22
 ARG GIT_COMMIT=unknown
 FROM ${PYTHON_BASE_IMAGE}
+ARG GIT_COMMIT=unknown
 
 LABEL org.opencontainers.image.revision=${GIT_COMMIT}
 
 WORKDIR /app
 
+USER root
 RUN apk add --no-cache --upgrade zlib \
     && rm -f /usr/bin/untgz /usr/bin/minigzip
+USER nonroot
 
 COPY VERSION /app/VERSION
 COPY requirements.txt /app/requirements.txt
