@@ -15,6 +15,38 @@ from fixtures import (
 from pihole_sqlite_exporter import metrics, scraper
 
 
+def _iter_metric_lines(text: str, name: str):
+    for line in text.splitlines():
+        if line.startswith("#"):
+            continue
+        if not line.startswith(name):
+            continue
+        yield line
+
+
+def _parse_labels(line: str) -> dict[str, str]:
+    if "{" not in line:
+        return {}
+    label_part = line.split("{", 1)[1].split("}", 1)[0]
+    label_items = {}
+    for item in label_part.split(","):
+        if not item:
+            continue
+        key, value = item.split("=", 1)
+        label_items[key] = value.strip('"')
+    return label_items
+
+
+def _labels_match(line: str, labels: dict[str, str] | None) -> bool:
+    if not labels:
+        return True
+    line_labels = _parse_labels(line)
+    for key, value in labels.items():
+        if line_labels.get(key) != value:
+            return False
+    return True
+
+
 @pytest.fixture
 def ftl_db(tmp_path: Path) -> Path:
     path = tmp_path / "pihole-FTL.db"
@@ -88,21 +120,9 @@ def metrics_text(exporter_config: None) -> str:
 @pytest.fixture
 def metric_value():
     def _metric_value(text: str, name: str, labels: dict[str, str] | None = None) -> float:
-        for line in text.splitlines():
-            if line.startswith("#") or not line.startswith(name):
+        for line in _iter_metric_lines(text, name):
+            if not _labels_match(line, labels):
                 continue
-            if labels:
-                if "{" not in line:
-                    continue
-                label_part = line.split("{", 1)[1].split("}", 1)[0]
-                label_items = {}
-                for item in label_part.split(","):
-                    if not item:
-                        continue
-                    key, value = item.split("=", 1)
-                    label_items[key] = value.strip('"')
-                if any(label_items.get(k) != v for k, v in labels.items()):
-                    continue
             return float(line.split()[-1])
         raise AssertionError(f"Metric {name} with labels {labels} not found")
 
