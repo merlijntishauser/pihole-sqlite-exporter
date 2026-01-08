@@ -44,12 +44,18 @@ def test_scrape_skipped_when_lock_held(
 
 
 def test_lifetime_destinations_cache_hit(monkeypatch: pytest.MonkeyPatch) -> None:
+    host = "test-host"
+    monkeypatch.setattr(scraper.SETTINGS, "hostname_label", host)
     monkeypatch.setattr(scraper.SETTINGS, "enable_lifetime_dest_counters", True)
     monkeypatch.setattr(scraper.SETTINGS, "lifetime_dest_cache_seconds", 60)
     monkeypatch.setattr(scraper.SETTINGS, "lifetime_dest_scan_interval", 1)
     monkeypatch.setattr(scraper.SETTINGS, "summary_only", False)
     monkeypatch.setattr(scraper.time, "time", lambda: 1000.0)
     monkeypatch.setattr(scraper, "_lifetime_dest_scan_count", 1)
+    cache_counter = metrics.METRICS.pihole_exporter_cache_hits_total.labels(
+        host, "lifetime_destinations"
+    )
+    before_hits = cache_counter._value.get()
     cached = {"1.1.1.1": 2, "cache": 1, "blocklist": 0}
     called = {}
 
@@ -72,6 +78,7 @@ def test_lifetime_destinations_cache_hit(monkeypatch: pytest.MonkeyPatch) -> Non
         scraper._lifetime_dest_cache_ts = 0.0
 
     assert called["value"] == cached
+    assert cache_counter._value.get() == before_hits + 1
 
 
 def test_lifetime_destinations_disabled_resets_cache(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -168,6 +175,14 @@ def test_lifetime_destinations_metric(
             {"hostname": "test-host", "destination": "1.1.1.1", "destination_name": "1.1.1.1"},
         )
         == 2.0
+    )
+    assert (
+        metric_value(
+            metrics_text,
+            "pihole_exporter_query_duration_seconds",
+            {"hostname": "test-host", "query": "counters"},
+        )
+        >= 0.0
     )
 
 
@@ -331,6 +346,8 @@ def test_scrape_and_update_logs_failure_and_snapshot_error(
 def test_scrape_loop_sleeps_and_stops(monkeypatch: pytest.MonkeyPatch) -> None:
     stop_event = threading.Event()
     calls = {"scrape": 0, "sleep": []}
+    host = "test-host"
+    monkeypatch.setattr(scraper.SETTINGS, "hostname_label", host)
 
     def _scrape():
         calls["scrape"] += 1
@@ -350,6 +367,8 @@ def test_scrape_loop_sleeps_and_stops(monkeypatch: pytest.MonkeyPatch) -> None:
 
     assert calls["scrape"] == 1
     assert calls["sleep"] == [4.0]
+    lag = metrics.METRICS.pihole_exporter_scrape_loop_lag_seconds.labels(host)._value.get()
+    assert lag == 0.0
 
 
 def test_scrape_loop_logs_warning_on_failure(

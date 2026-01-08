@@ -124,6 +124,7 @@ def _load_lifetime_destinations(cur: sqlite3.Cursor, blocked_list: str) -> None:
         and (now - _lifetime_dest_cache_ts) < cache_seconds
     ):
         metrics.METRICS.set_forward_destinations_lifetime(_lifetime_dest_cache)
+        metrics.METRICS.record_cache_hit(SETTINGS.hostname_label, "lifetime_destinations")
         logger.debug(
             "Lifetime destinations cache hit: age=%.0fs labelsets=%d",
             now - _lifetime_dest_cache_ts,
@@ -137,6 +138,7 @@ def _load_lifetime_destinations(cur: sqlite3.Cursor, blocked_list: str) -> None:
         scan_due = _lifetime_dest_scan_count % scan_interval == 0
     if not scan_due and _lifetime_dest_cache:
         metrics.METRICS.set_forward_destinations_lifetime(_lifetime_dest_cache)
+        metrics.METRICS.record_cache_hit(SETTINGS.hostname_label, "lifetime_destinations")
         logger.debug(
             "Lifetime destinations scan skipped: interval=%d labelsets=%d",
             scan_interval,
@@ -144,6 +146,7 @@ def _load_lifetime_destinations(cur: sqlite3.Cursor, blocked_list: str) -> None:
         )
         return
 
+    metrics.METRICS.record_cache_miss(SETTINGS.hostname_label, "lifetime_destinations")
     lifetime = {}
     cur.execute(SQL_LIFETIME_FORWARD_DESTS)
     forward_entries = [(str(fwd), int(cnt)) for fwd, cnt in cur.fetchall()]
@@ -359,22 +362,42 @@ def scrape_and_update():
 
         with sqlite_ro(SETTINGS.ftl_db_path) as conn:
             cur = conn.cursor()
-            _load_counters(cur, host)
-            _load_lifetime_destinations(cur, blocked_list)
-            _load_clients_ever_seen(cur, host)
-            _load_queries_today(cur, host, sod, blocked_list)
-            _load_unique_counts(cur, host, now)
-            _load_query_types(cur, host, sod)
-            _load_reply_types(cur, host, sod)
-            _load_forwarded_cached(cur, host, sod)
+            _time_call(host, "counters", _load_counters, cur, host)
+            _time_call(
+                host, "lifetime_destinations", _load_lifetime_destinations, cur, blocked_list
+            )
+            _time_call(host, "clients_ever_seen", _load_clients_ever_seen, cur, host)
+            _time_call(host, "queries_today", _load_queries_today, cur, host, sod, blocked_list)
+            _time_call(host, "unique_counts", _load_unique_counts, cur, host, now)
+            _time_call(host, "query_types", _load_query_types, cur, host, sod)
+            _time_call(host, "reply_types", _load_reply_types, cur, host, sod)
+            _time_call(host, "forwarded_cached", _load_forwarded_cached, cur, host, sod)
             if not SETTINGS.summary_only:
-                _load_forward_destinations(cur, host, sod)
-                _load_synthetic_destinations(cur, host, sod, blocked_list)
-                _load_top_lists(cur, host, sod, blocked_list, SETTINGS.top_n)
+                _time_call(host, "forward_destinations", _load_forward_destinations, cur, host, sod)
+                _time_call(
+                    host,
+                    "synthetic_destinations",
+                    _load_synthetic_destinations,
+                    cur,
+                    host,
+                    sod,
+                    blocked_list,
+                )
+                _time_call(
+                    host,
+                    "top_lists",
+                    _load_top_lists,
+                    cur,
+                    host,
+                    sod,
+                    blocked_list,
+                    SETTINGS.top_n,
+                )
 
-        _load_domains_blocked(host)
+        _time_call(host, "domains_blocked", _load_domains_blocked, host)
         success = 1.0
     except Exception:
+        metrics.METRICS.record_error(host, "scrape")
         logger.exception(
             "Scrape failed (host=%s, tz=%s, sod=%s, now=%s)",
             ctx[0],
@@ -390,12 +413,15 @@ def scrape_and_update():
         metrics.METRICS.pihole_scrape_duration_seconds.labels(host).set(duration)
         metrics.METRICS.pihole_scrape_success.labels(host).set(success)
         metrics.METRICS.record_scrape_result(success == 1.0, timestamp=scrape_timestamp)
+        if success == 1.0:
+            metrics.METRICS.clear_error(host)
         try:
             metrics.METRICS.update_snapshot(
                 generate_latest(metrics.METRICS.registry),
                 timestamp=scrape_timestamp,
             )
         except Exception:
+            metrics.METRICS.record_error(host, "snapshot")
             logger.exception("Failed to update metrics snapshot cache")
         logger.debug(
             "Scrape completed (host=%s, tz=%s, sod=%s, now=%s) duration=%.3fs success=%s",
@@ -408,6 +434,14 @@ def scrape_and_update():
         )
 
 
+def _time_call(host: str, name: str, func, *args):
+    start = time.perf_counter()
+    result = func(*args)
+    duration = time.perf_counter() - start
+    metrics.METRICS.record_query_duration(host, name, duration)
+    return result
+
+
 def _scrape_loop(
     stop_event: threading.Event | None = None,
     sleep_fn=time.sleep,
@@ -415,12 +449,21 @@ def _scrape_loop(
     initial_delay: float = 0.0,
 ) -> None:
     interval = max(1, SETTINGS.scrape_interval)
+    host = SETTINGS.hostname_label
+    last_start = None
     if initial_delay > 0:
         sleep_fn(initial_delay)
     while True:
         if stop_event is not None and stop_event.is_set():
             return
         start = time_fn()
+        if last_start is not None:
+            expected = last_start + interval
+            lag = 0.0
+            if start > expected:
+                lag = start - expected
+            metrics.METRICS.pihole_exporter_scrape_loop_lag_seconds.labels(host).set(lag)
+        last_start = start
         try:
             scrape_and_update()
         except Exception:

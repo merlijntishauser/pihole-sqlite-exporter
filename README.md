@@ -38,6 +38,13 @@ All collected metrics (example values shown):
 | pihole_reply | gauge | `pihole_reply{hostname="pi",type="NODATA"} 120` |
 | pihole_scrape_duration_seconds | gauge | `pihole_scrape_duration_seconds{hostname="pi"} 0.145` |
 | pihole_scrape_success | gauge | `pihole_scrape_success{hostname="pi"} 1` |
+| pihole_exporter_scrape_loop_lag_seconds | gauge | `pihole_exporter_scrape_loop_lag_seconds{hostname="pi"} 0` |
+| pihole_exporter_last_error_timestamp | gauge | `pihole_exporter_last_error_timestamp{hostname="pi"} 0` |
+| pihole_exporter_last_error_is_set | gauge | `pihole_exporter_last_error_is_set{hostname="pi"} 0` |
+| pihole_exporter_errors_total | counter | `pihole_exporter_errors_total{hostname="pi",stage="scrape"} 0` |
+| pihole_exporter_cache_hits_total | counter | `pihole_exporter_cache_hits_total{hostname="pi",cache="lifetime_destinations"} 12` |
+| pihole_exporter_cache_misses_total | counter | `pihole_exporter_cache_misses_total{hostname="pi",cache="lifetime_destinations"} 2` |
+| pihole_exporter_query_duration_seconds | gauge | `pihole_exporter_query_duration_seconds{hostname="pi",query="counters"} 0.001` |
 | pihole_status | gauge | `pihole_status{hostname="pi"} 1` |
 | pihole_top_ads | gauge | `pihole_top_ads{hostname="pi",domain="ads.example"} 42` |
 | pihole_top_queries | gauge | `pihole_top_queries{hostname="pi",domain="example.com"} 120` |

@@ -3,7 +3,7 @@ import time
 from collections.abc import Iterable
 from dataclasses import dataclass
 
-from prometheus_client import CollectorRegistry, Gauge
+from prometheus_client import CollectorRegistry, Counter, Gauge
 from prometheus_client.core import CounterMetricFamily
 from prometheus_client.metrics_core import Metric
 from prometheus_client.registry import Collector
@@ -188,6 +188,55 @@ class Metrics:
             registry=self.registry,
         )
 
+        self.pihole_exporter_scrape_loop_lag_seconds = Gauge(
+            "pihole_exporter_scrape_loop_lag_seconds",
+            "Seconds the scrape loop falls behind its target interval",
+            ["hostname"],
+            registry=self.registry,
+        )
+
+        self.pihole_exporter_last_error_timestamp = Gauge(
+            "pihole_exporter_last_error_timestamp",
+            "Unix timestamp of the most recent exporter error (0 if none)",
+            ["hostname"],
+            registry=self.registry,
+        )
+
+        self.pihole_exporter_last_error_is_set = Gauge(
+            "pihole_exporter_last_error_is_set",
+            "Whether the exporter has recorded an error since startup",
+            ["hostname"],
+            registry=self.registry,
+        )
+
+        self.pihole_exporter_errors_total = Counter(
+            "pihole_exporter_errors_total",
+            "Total number of exporter errors by stage",
+            ["hostname", "stage"],
+            registry=self.registry,
+        )
+
+        self.pihole_exporter_cache_hits_total = Counter(
+            "pihole_exporter_cache_hits_total",
+            "Exporter cache hits by cache name",
+            ["hostname", "cache"],
+            registry=self.registry,
+        )
+
+        self.pihole_exporter_cache_misses_total = Counter(
+            "pihole_exporter_cache_misses_total",
+            "Exporter cache misses by cache name",
+            ["hostname", "cache"],
+            registry=self.registry,
+        )
+
+        self.pihole_exporter_query_duration_seconds = Gauge(
+            "pihole_exporter_query_duration_seconds",
+            "Seconds spent collecting a query group during scrape",
+            ["hostname", "query"],
+            registry=self.registry,
+        )
+
         self.pihole_status = Gauge(
             "pihole_status",
             "Whether Pi-hole is enabled",
@@ -268,6 +317,25 @@ class Metrics:
                 self._last_scrape_timestamp,
                 self._last_successful_scrape_timestamp,
             )
+
+    def record_error(self, host: str, stage: str, timestamp: float | None = None) -> None:
+        if timestamp is None:
+            timestamp = time.time()
+        self.pihole_exporter_last_error_is_set.labels(host).set(1.0)
+        self.pihole_exporter_last_error_timestamp.labels(host).set(timestamp)
+        self.pihole_exporter_errors_total.labels(host, stage).inc()
+
+    def record_query_duration(self, host: str, query: str, duration: float) -> None:
+        self.pihole_exporter_query_duration_seconds.labels(host, query).set(duration)
+
+    def record_cache_hit(self, host: str, cache_name: str) -> None:
+        self.pihole_exporter_cache_hits_total.labels(host, cache_name).inc()
+
+    def record_cache_miss(self, host: str, cache_name: str) -> None:
+        self.pihole_exporter_cache_misses_total.labels(host, cache_name).inc()
+
+    def clear_error(self, host: str) -> None:
+        self.pihole_exporter_last_error_is_set.labels(host).set(0.0)
 
     def clear_dynamic_series(self) -> None:
         self.pihole_top_ads.clear()

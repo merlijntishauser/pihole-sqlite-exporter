@@ -1,6 +1,7 @@
 # Changelog
 
 ## 0.3.6 (unreleased)
+- Added exporter self-metrics for scrape loop lag, cache hits/misses, last error, and per-query timings.
 - Added summary-only scraping and new lifetime destination controls (scan interval and max entries) to reduce memory usage.
 - Consolidated exporter tests into a single module.
 - Refined changelog wording and ensured dated entries.
