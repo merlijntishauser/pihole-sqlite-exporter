@@ -5,7 +5,7 @@ IMAGE_TAG ?= $(VERSION)
 DOCKER_IMAGE := $(IMAGE_NAME):$(IMAGE_TAG)
 GIT_COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null)
 
-.PHONY: venv install lint format typecheck test coverage contract ci version version-bump docker-buildx docker-verify docker-redeploy tag-move
+.PHONY: venv install lint format typecheck test coverage contract contract-all ci version version-bump docker-buildx docker-verify docker-redeploy tag-move
 
 venv:
 	python -m venv .venv
@@ -26,6 +26,9 @@ contract:
 	scripts/run_pihole_contract.sh
 
 ci: lint format typecheck test
+
+contract-all:
+	PIHOLE_TAGS="latest nightly 2025.11.1" scripts/run_pihole_contract.sh
 
 test:
 	.venv/bin/pytest

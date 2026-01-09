@@ -98,6 +98,13 @@ jobs:
       - lint
       - format
       - typecheck
+    strategy:
+      fail-fast: false
+      matrix:
+        pihole_tag:
+          - latest
+          - nightly
+          - 2025.11.1
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -115,30 +122,30 @@ jobs:
 
       - name: Start Pi-hole container
         run: |
-          docker run -d --name pihole \
+          docker run -d --name "pihole-${{ matrix.pihole_tag }}" \
             --cap-add=NET_ADMIN \
             -e TZ=UTC \
             -e WEBPASSWORD=admin \
             -e FTLCONF_LOCAL_IPV4=127.0.0.1 \
-            pihole/pihole:latest
+            pihole/pihole:${{ matrix.pihole_tag }}
 
       - name: Wait for Pi-hole databases
         run: |
           for i in $(seq 1 30); do
-            if docker exec pihole test -f /etc/pihole/pihole-FTL.db && \
-               docker exec pihole test -f /etc/pihole/gravity.db; then
+            if docker exec "pihole-${{ matrix.pihole_tag }}" test -f /etc/pihole/pihole-FTL.db && \
+               docker exec "pihole-${{ matrix.pihole_tag }}" test -f /etc/pihole/gravity.db; then
               echo "Pi-hole DBs ready."
               exit 0
             fi
             sleep 2
           done
-          docker logs pihole
+          docker logs "pihole-${{ matrix.pihole_tag }}"
           exit 1
 
       - name: Copy Pi-hole databases
         run: |
-          docker cp pihole:/etc/pihole/pihole-FTL.db .ci-pihole-FTL.db
-          docker cp pihole:/etc/pihole/gravity.db .ci-gravity.db
+          docker cp "pihole-${{ matrix.pihole_tag }}":/etc/pihole/pihole-FTL.db .ci-pihole-FTL.db
+          docker cp "pihole-${{ matrix.pihole_tag }}":/etc/pihole/gravity.db .ci-gravity.db
 
       - name: Contract tests
         env:
@@ -150,5 +157,5 @@ jobs:
       - name: Cleanup Pi-hole container
         if: always()
         run: |
-          docker rm -f pihole
+          docker rm -f "pihole-${{ matrix.pihole_tag }}"
           rm -f .ci-pihole-FTL.db .ci-pihole-FTL.db-shm .ci-pihole-FTL.db-wal .ci-gravity.db

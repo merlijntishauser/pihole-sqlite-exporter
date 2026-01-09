@@ -113,6 +113,21 @@ Runs the Docker-backed contract test locally using `pihole/pihole:latest`:
 ```bash
 make contract
 ```
+To run the same matrix locally:
+```bash
+PIHOLE_TAGS="latest nightly 2025.11.1" make contract
+```
+Or with the shortcut target:
+```bash
+make contract-all
+```
+
+Contract test matrix (CI):
+| Pi-hole tag | Notes |
+|---|---|
+| latest | Current stable |
+| nightly | Nightly snapshot |
+| 2025.11.1 | Pinned version |
 
 ## Docker release
 For a multi-arch build/push (amd64/arm64):
