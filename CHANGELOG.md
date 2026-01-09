@@ -1,12 +1,17 @@
 # Changelog
 
-## 0.3.6 (unreleased)
+## 0.3.9 (2026-01-08)
+- Added a matrix with PiHole versions for contract testing
+- Fixed a bug in the exporter's query cache that caused it to return stale data.
 - Added exporter self-metrics for scrape loop lag, cache hits/misses, last error, and per-query timings.
 - Added summary-only scraping and new lifetime destination controls (scan interval and max entries) to reduce memory usage.
 - Introduced a ScrapeContext to reduce scraper global state and improve testability.
 - Added a Docker-backed Pi-hole contract test in CI.
 - Consolidated exporter tests into a single module.
 - Refined changelog wording and ensured dated entries.
+
+## 0.3.6 - 0.3.8 (2026-01-08)
+- Releases for pipeline integration with docker hub
 
 ## 0.3.5 (2026-01-08)
 - Added Dockle FATAL gating with detailed scan output and a scan-only workflow option.
