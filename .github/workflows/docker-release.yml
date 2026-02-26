@@ -58,7 +58,7 @@ jobs:
         run: docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest image --format json --output trivy.json scan-image:${{ github.sha }}
 
       - name: Upload scan artifacts
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: scan-results
           path: |
